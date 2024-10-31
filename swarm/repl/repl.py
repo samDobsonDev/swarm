@@ -1,7 +1,7 @@
 import json
 
 from swarm import Swarm
-
+from swarm.util import debug_print
 
 def process_and_print_streaming_response(response):
     content = ""
@@ -65,6 +65,7 @@ def run_demo_loop(
 
     messages = []
     agent = starting_agent
+    total_tokens_used = 0  # Initialize a variable to track total tokens
 
     while True:
         user_input = input("\033[90mUser\033[0m: ")
@@ -82,6 +83,12 @@ def run_demo_loop(
             response = process_and_print_streaming_response(response)
         else:
             pretty_print_messages(response.messages)
+
+        # Update the total tokens used
+        total_tokens_used += response.tokens_used
+
+        # Print total tokens used
+        debug_print(debug, f"Total tokens used in this session: {total_tokens_used}")
 
         messages.extend(response.messages)
         agent = response.agent

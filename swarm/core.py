@@ -2,25 +2,86 @@
 import copy
 import json
 from collections import defaultdict
-from typing import List, Callable, Union
+from typing import List
 
 # Package/library imports
 from openai import OpenAI
-
+from openai.types.chat import ChatCompletionMessage
+from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall, Function
 
 # Local imports
 from .util import function_to_json, debug_print, merge_chunk
-from .types import (
-    Agent,
-    AgentFunction,
-    ChatCompletionMessage,
-    ChatCompletionMessageToolCall,
-    Function,
-    Response,
-    Result,
-)
+from .types import Agent, AgentFunction, Response, Result
 
 __CTX_VARS_NAME__ = "context_variables"
+
+def handle_function_result(result, debug) -> Result:
+    match result:
+        case Result() as result:
+            return result
+
+        case Agent() as agent:
+            return Result(
+                value=json.dumps({"assistant": agent.name}),
+                agent=agent,
+            )
+        case _:
+            try:
+                return Result(value=str(result))
+            except Exception as e:
+                error_message = f"Failed to cast response to string: {result}. Make sure agent functions return a string or Result object. Error: {str(e)}"
+                debug_print(debug, error_message)
+                raise TypeError(error_message)
+
+
+def handle_tool_calls(
+        tool_calls: List[ChatCompletionMessageToolCall],
+    functions: List[AgentFunction],
+    context_variables: dict,
+    debug: bool,
+) -> Response:
+    function_map = {f.__name__: f for f in functions}
+    partial_response = Response(
+        messages=[], agent=None, context_variables={})
+
+    for tool_call in tool_calls:
+        name = tool_call.function.name
+        # handle missing tool case, skip to next tool
+        if name not in function_map:
+            debug_print(debug, f"Tool {name} not found in function map.")
+            partial_response.messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "tool_name": name,
+                    "content": f"Error: Tool {name} not found.",
+                }
+            )
+            continue
+        args = json.loads(tool_call.function.arguments)
+        debug_print(
+            debug, f"Processing tool call: {name} with arguments {args}")
+
+        func = function_map[name]
+        # pass context_variables to agent functions
+        if __CTX_VARS_NAME__ in func.__code__.co_varnames:
+            args[__CTX_VARS_NAME__] = context_variables
+        raw_result = function_map[name](**args)
+
+        result: Result = handle_function_result(raw_result, debug)
+        partial_response.messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "tool_name": name,
+                "content": result.value,
+            }
+        )
+        partial_response.context_variables.update(result.context_variables)
+        if result.agent:
+            partial_response.agent = result.agent
+
+    return partial_response
 
 
 class Swarm:
@@ -30,13 +91,13 @@ class Swarm:
         self.client = client
 
     def get_chat_completion(
-        self,
-        agent: Agent,
-        history: List,
-        context_variables: dict,
-        model_override: str,
-        stream: bool,
-        debug: bool,
+            self,
+            agent: Agent,
+            history: List,
+            context_variables: dict,
+            model_override: str,
+            stream: bool,
+            debug: bool,
     ) -> ChatCompletionMessage:
         context_variables = defaultdict(str, context_variables)
         instructions = (
@@ -45,7 +106,6 @@ class Swarm:
             else agent.instructions
         )
         messages = [{"role": "system", "content": instructions}] + history
-        debug_print(debug, "Getting chat completion for...:", messages)
 
         tools = [function_to_json(f) for f in agent.functions]
         # hide context_variables from model
@@ -66,75 +126,10 @@ class Swarm:
         if tools:
             create_params["parallel_tool_calls"] = agent.parallel_tool_calls
 
+        # Debug print the full create_params object
+        debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=4))
+
         return self.client.chat.completions.create(**create_params)
-
-    def handle_function_result(self, result, debug) -> Result:
-        match result:
-            case Result() as result:
-                return result
-
-            case Agent() as agent:
-                return Result(
-                    value=json.dumps({"assistant": agent.name}),
-                    agent=agent,
-                )
-            case _:
-                try:
-                    return Result(value=str(result))
-                except Exception as e:
-                    error_message = f"Failed to cast response to string: {result}. Make sure agent functions return a string or Result object. Error: {str(e)}"
-                    debug_print(debug, error_message)
-                    raise TypeError(error_message)
-
-    def handle_tool_calls(
-        self,
-        tool_calls: List[ChatCompletionMessageToolCall],
-        functions: List[AgentFunction],
-        context_variables: dict,
-        debug: bool,
-    ) -> Response:
-        function_map = {f.__name__: f for f in functions}
-        partial_response = Response(
-            messages=[], agent=None, context_variables={})
-
-        for tool_call in tool_calls:
-            name = tool_call.function.name
-            # handle missing tool case, skip to next tool
-            if name not in function_map:
-                debug_print(debug, f"Tool {name} not found in function map.")
-                partial_response.messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "tool_name": name,
-                        "content": f"Error: Tool {name} not found.",
-                    }
-                )
-                continue
-            args = json.loads(tool_call.function.arguments)
-            debug_print(
-                debug, f"Processing tool call: {name} with arguments {args}")
-
-            func = function_map[name]
-            # pass context_variables to agent functions
-            if __CTX_VARS_NAME__ in func.__code__.co_varnames:
-                args[__CTX_VARS_NAME__] = context_variables
-            raw_result = function_map[name](**args)
-
-            result: Result = self.handle_function_result(raw_result, debug)
-            partial_response.messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "tool_name": name,
-                    "content": result.value,
-                }
-            )
-            partial_response.context_variables.update(result.context_variables)
-            if result.agent:
-                partial_response.agent = result.agent
-
-        return partial_response
 
     def run_and_stream(
         self,
@@ -212,7 +207,7 @@ class Swarm:
                 tool_calls.append(tool_call_object)
 
             # handle function calls, updating context_variables, and switching agents
-            partial_response = self.handle_tool_calls(
+            partial_response = handle_tool_calls(
                 tool_calls, active_agent.functions, context_variables, debug
             )
             history.extend(partial_response.messages)
@@ -254,6 +249,9 @@ class Swarm:
         history = copy.deepcopy(messages)
         init_len = len(messages)
 
+        # Add a variable to track total tokens
+        tokens_used = 0
+
         while len(history) - init_len < max_turns and active_agent:
 
             # get completion with current history, agent
@@ -272,12 +270,15 @@ class Swarm:
                 json.loads(message.model_dump_json())
             )  # to avoid OpenAI types (?)
 
+            # Update tokens used in interaction (prompt + response)
+            tokens_used += completion.usage.total_tokens
+
             if not message.tool_calls or not execute_tools:
                 debug_print(debug, "Ending turn.")
                 break
 
             # handle function calls, updating context_variables, and switching agents
-            partial_response = self.handle_tool_calls(
+            partial_response = handle_tool_calls(
                 message.tool_calls, active_agent.functions, context_variables, debug
             )
             history.extend(partial_response.messages)
@@ -289,4 +290,5 @@ class Swarm:
             messages=history[init_len:],
             agent=active_agent,
             context_variables=context_variables,
+            tokens_used=tokens_used
         )

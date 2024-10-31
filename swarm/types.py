@@ -1,8 +1,3 @@
-from openai.types.chat import ChatCompletionMessage
-from openai.types.chat.chat_completion_message_tool_call import (
-    ChatCompletionMessageToolCall,
-    Function,
-)
 from typing import List, Callable, Union, Optional
 
 # Third-party imports
@@ -24,6 +19,7 @@ class Response(BaseModel):
     messages: List = []
     agent: Optional[Agent] = None
     context_variables: dict = {}
+    tokens_used: int = 0
 
 
 class Result(BaseModel):
