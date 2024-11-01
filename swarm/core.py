@@ -2,11 +2,11 @@
 import copy
 import json
 from collections import defaultdict
-from typing import List
+from typing import List, Dict, Any, Generator
 
 # Package/library imports
-from openai import OpenAI
-from openai.types.chat import ChatCompletionMessage
+from openai import OpenAI, Stream
+from openai.types.chat import ChatCompletionMessage, ChatCompletionChunk
 from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall, Function
 
 # Local imports
@@ -66,7 +66,7 @@ def handle_tool_calls(
         # pass context_variables to agent functions
         if __CTX_VARS_NAME__ in func.__code__.co_varnames:
             args[__CTX_VARS_NAME__] = context_variables
-        raw_result = function_map[name](**args)
+        raw_result = function_map[name]()
 
         result: Result = handle_function_result(raw_result, debug)
         partial_response.messages.append(
@@ -98,7 +98,7 @@ class Swarm:
             model_override: str,
             stream: bool,
             debug: bool,
-    ) -> ChatCompletionMessage:
+    ) -> ChatCompletionMessage | Stream[ChatCompletionChunk]:
         context_variables = defaultdict(str, context_variables)
         instructions = (
             agent.instructions(context_variables)
@@ -127,7 +127,7 @@ class Swarm:
             create_params["parallel_tool_calls"] = agent.parallel_tool_calls
 
         # Debug print the full create_params object
-        debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=4))
+        #debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=4))
 
         return self.client.chat.completions.create(**create_params)
 
@@ -233,7 +233,7 @@ class Swarm:
         debug: bool = False,
         max_turns: int = float("inf"),
         execute_tools: bool = True,
-    ) -> Response:
+    ) -> Generator[dict[str, str] | dict[str, str] | dict[str, Response] | Any, Any, None] | Response:
         if stream:
             return self.run_and_stream(
                 agent=agent,

@@ -3,7 +3,6 @@ import random
 
 import database
 from swarm import Agent
-from swarm.agents import create_triage_agent
 from swarm.repl import run_demo_loop
 
 
@@ -92,13 +91,29 @@ database.preview_table("Products")
 
 # Define the agents
 
+def transfer_to_sales():
+    return sales_agent
+
+def transfer_to_refunds():
+    return refunds_agent
+
+def transfer_to_triage():
+    return triage_agent
+
+def create_triage_agent(name, instructions, agents):
+    return Agent(
+        name=name,
+        instructions=instructions,
+        functions=[transfer_to_sales, transfer_to_refunds],
+    )
+
 refunds_agent = Agent(
     name="Refunds Agent",
     description=f"""You are a refund agent that handles all actions related to refunds after a return has been processed.
     You must ask for both the user ID and item ID to initiate a refund. Ask for both user_id and item_id in one message.
     If the user asks you to notify them, you must ask them what their preferred method of notification is. For notifications, you must
     ask them for user_id and method in one message.""",
-    functions=[refund_item, notify_customer],
+    functions=[refund_item, notify_customer, transfer_to_triage]
 )
 
 sales_agent = Agent(
@@ -109,7 +124,7 @@ sales_agent = Agent(
     If the user asks you to notify them, you must ask them what their preferred method is. For notifications, you must
     ask them for user_id and method in one message.
     """,
-    functions=[order_item, notify_customer],
+    functions=[order_item, notify_customer, transfer_to_triage]
 )
 
 triage_agent = create_triage_agent(
@@ -121,8 +136,7 @@ triage_agent = create_triage_agent(
     If the user request is about getting a refund on an item or returning a product, transfer to the Refunds Agent.
     When you need more information to triage the request to an agent, ask a direct question without explaining why you're asking it.
     Do not share your thought process with the user! Do not make unreasonable assumptions on behalf of user.""",
-    agents=[sales_agent, refunds_agent],
-    add_backlinks=True,
+    agents=[sales_agent, refunds_agent]
 )
 
 for f in triage_agent.functions:

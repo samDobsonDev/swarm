@@ -1,9 +1,9 @@
-from src.utils import get_completion
-from configs.prompts import EVAL_GROUNDTRUTH_PROMPT
-import json
 import re
 import ast
-from openai import OpenAI
+
+from examples.customer_service_streaming.configs.prompts import EVAL_GROUNDTRUTH_PROMPT
+from examples.customer_service_streaming.src.utils import get_completion
+
 
 class EvalFunction:
 

@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Literal
 
-
 class Parameter(BaseModel):
     type: str
     description: Optional[str] = None

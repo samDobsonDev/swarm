@@ -1,8 +1,10 @@
 import os
 import importlib
 import json
-from src.swarm.tool import Tool
-from src.swarm.assistants import Assistant
+
+from examples.customer_service_streaming.src.swarm.assistants import Assistant
+from examples.customer_service_streaming.src.swarm.tool import Tool
+
 
 def validate_tool(tool_definition):
     # Validate the tool using its schema

@@ -1,7 +1,6 @@
 import inspect
 from datetime import datetime
 
-
 def debug_print(debug: bool, *args: str) -> None:
     if not debug:
         return

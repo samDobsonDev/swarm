@@ -1,5 +1,4 @@
 from openai import OpenAI
-from src.utils import get_completion
 import qdrant_client
 import re
 
@@ -15,7 +14,7 @@ EMBEDDING_MODEL = 'text-embedding-3-large'
 collection_name = 'help_center'
 
 # # # Query function for qdrant
-def query_qdrant(query, collection_name, vector_name='article', top_k=5):
+def query_qdrant(query, collection, vector_name='article', top_k=5):
     # Creates embedding vector from user query
     embedded_query = client.embeddings.create(
         input=query,
@@ -23,7 +22,7 @@ def query_qdrant(query, collection_name, vector_name='article', top_k=5):
     ).data[0].embedding
 
     query_results = qdrant.search(
-        collection_name=collection_name,
+        collection_name=collection,
         query_vector=(
             vector_name, embedded_query
         ),
@@ -35,7 +34,7 @@ def query_qdrant(query, collection_name, vector_name='article', top_k=5):
 
 def query_docs(query):
     print(f'Searching knowledge base with query: {query}')
-    query_results = query_qdrant(query,collection_name=collection_name)
+    query_results = query_qdrant(query,collection=collection_name)
     output = []
 
     for i, article in enumerate(query_results):

@@ -1,15 +1,14 @@
 import importlib
 import json
 import os
-from configs.prompts import TRIAGE_MESSAGE_PROMPT, TRIAGE_SYSTEM_PROMPT, EVAL_GROUNDTRUTH_PROMPT, EVAL_PLANNING_PROMPT, ITERATE_PROMPT
-from src.utils import get_completion, is_dict_empty
-from configs.general import Colors, max_iterations
-from src.swarm.assistants import Assistant
-from src.swarm.tool import Tool
-from src.tasks.task import EvaluationTask
-from src.runs.run import Run
 
-
+from examples.customer_service_streaming.configs.prompts import TRIAGE_MESSAGE_PROMPT, TRIAGE_SYSTEM_PROMPT, EVAL_GROUNDTRUTH_PROMPT, EVAL_PLANNING_PROMPT, ITERATE_PROMPT
+from examples.customer_service_streaming.src.utils import get_completion, is_dict_empty
+from examples.customer_service_streaming.configs.general import Colors, max_iterations
+from examples.customer_service_streaming.src.swarm.assistants import Assistant
+from examples.customer_service_streaming.src.swarm.tool import Tool
+from examples.customer_service_streaming.src.tasks.task import EvaluationTask
+from examples.customer_service_streaming.src.runs.run import Run
 
 class LocalEngine:
     def __init__(self, client, tasks, persist=False):

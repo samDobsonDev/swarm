@@ -1,12 +1,12 @@
 import json
 from openai import OpenAI
-from src.tasks.task import Task, EvaluationTask
-from src.swarm.engines.assistants_engine import AssistantsEngine
-from src.swarm.engines.local_engine import LocalEngine
-from configs.general import Colors, tasks_path
+
+from examples.customer_service_streaming.configs.general import Colors, tasks_path
+from examples.customer_service_streaming.src.swarm.engines.assistants_engine import AssistantsEngine
+from examples.customer_service_streaming.src.swarm.engines.local_engine import LocalEngine
+from examples.customer_service_streaming.src.tasks.task import Task
 
 # This class represents the main control unit for deploying and managing tasks within the swarm system.
-
 
 class Swarm:
     def __init__(self, engine_name, tasks=[], persist=False):

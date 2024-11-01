@@ -1,11 +1,12 @@
-from pydantic import BaseModel
-from typing import Any, Optional
-from configs.prompts import EVALUATE_TASK_PROMPT
-from configs.general import Colors
-from src.utils import get_completion
 import json
 import time
 
+from pydantic import BaseModel
+from typing import Any, Optional
+
+from examples.customer_service_streaming.configs.general import Colors
+from examples.customer_service_streaming.configs.prompts import EVALUATE_TASK_PROMPT
+from examples.customer_service_streaming.src.utils import get_completion
 
 class Assistant(BaseModel):
     log_flag: bool

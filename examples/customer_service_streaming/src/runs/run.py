@@ -1,6 +1,7 @@
-from configs.prompts import LOCAL_PLANNER_PROMPT
-from src.utils import get_completion
 import json
+
+from examples.customer_service_streaming.configs.prompts import LOCAL_PLANNER_PROMPT
+from examples.customer_service_streaming.src.utils import get_completion
 
 class Run:
     def __init__(self,assistant,request,client):

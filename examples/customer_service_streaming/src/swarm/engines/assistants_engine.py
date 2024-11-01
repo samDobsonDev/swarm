@@ -1,14 +1,13 @@
 import json
 import os
-from src.utils import get_completion
-from configs.general import Colors
-from configs.prompts import TRIAGE_SYSTEM_PROMPT, TRIAGE_MESSAGE_PROMPT, EVALUATE_TASK_PROMPT
 import time
-from src.swarm.assistants import Assistant
-from src.tasks.task import EvaluationTask
-from openai import OpenAI
 import importlib
 
+from examples.customer_service_streaming.src.utils import get_completion
+from examples.customer_service_streaming.configs.general import Colors
+from examples.customer_service_streaming.configs.prompts import TRIAGE_SYSTEM_PROMPT, TRIAGE_MESSAGE_PROMPT, EVALUATE_TASK_PROMPT
+from examples.customer_service_streaming.src.swarm.assistants import Assistant
+from examples.customer_service_streaming.src.tasks.task import EvaluationTask
 
 class AssistantsEngine:
     def __init__(self,client,tasks):
