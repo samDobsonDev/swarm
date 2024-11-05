@@ -57,7 +57,7 @@ Ask user clarifying questions until you know whether or not it is a cancel reque
 )
 
 flight_cancel = Agent(
-    name="Flight cancel traversal",
+    name="Flight Cancellation Agent",
     instructions=STARTER_PROMPT + FLIGHT_CANCELLATION_POLICY,
     functions=[
         escalate_to_agent,
@@ -69,7 +69,7 @@ flight_cancel = Agent(
 )
 
 flight_change = Agent(
-    name="Flight change traversal",
+    name="Flight Change Agent",
     instructions=STARTER_PROMPT + FLIGHT_CHANGE_POLICY,
     functions=[
         escalate_to_agent,
@@ -81,7 +81,7 @@ flight_change = Agent(
 )
 
 lost_baggage = Agent(
-    name="Lost baggage traversal",
+    name="Lost Baggage Agent",
     instructions=STARTER_PROMPT + LOST_BAGGAGE_POLICY,
     functions=[
         escalate_to_agent,

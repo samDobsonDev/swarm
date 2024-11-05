@@ -127,16 +127,16 @@ At its core, Swarm's `client.run()` implements the following loop:
 
 #### Arguments
 
-| Argument              | Type    | Description                                                                                                                                            | Default        |
-| --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
-| **agent**             | `Agent` | The (initial) agent to be called.                                                                                                                      | (required)     |
-| **messages**          | `List`  | A list of message objects, identical to [Chat Completions `messages`](https://platform.openai.com/docs/api-reference/chat/create#chat-create-messages) | (required)     |
-| **context_variables** | `dict`  | A dictionary of additional context variables, available to functions and Agent instructions                                                            | `{}`           |
-| **max_turns**         | `int`   | The maximum number of conversational turns allowed                                                                                                     | `float("inf")` |
-| **model_override**    | `str`   | An optional string to override the model being used by an Agent                                                                                        | `None`         |
-| **execute_tools**     | `bool`  | If `False`, interrupt execution and immediately returns `tool_calls` message when an Agent tries to call a function                                    | `True`         |
-| **stream**            | `bool`  | If `True`, enables streaming responses                                                                                                                 | `False`        |
-| **debug**             | `bool`  | If `True`, enables debug logging                                                                                                                       | `False`        |
+| Argument                 | Type    | Description                                                                                                                   | Default        |
+|--------------------------| ------- |-------------------------------------------------------------------------------------------------------------------------------| -------------- |
+| **agent**                | `Agent` | The (initial) agent to be called.                                                                                             | (required)     |
+| **messages**             | `List`  | A list of message objects, identical to [Chat Completions `messages`](https://platform.openai.com/docs/api-reference/chat/create#chat-create-messages) | (required)     |
+| **context_variables**    | `dict`  | A dictionary of additional context variables, available to functions and Agent instructions                                   | `{}`           |
+| **max_sequential_turns** | `int`   | The amount of sequential turns the assistant can have before returning back to the user, default to positive infinity         | `float("inf")` |
+| **model_override**       | `str`   | An optional string to override the model being used by an Agent                                                               | `None`         |
+| **execute_tools**        | `bool`  | If `False`, interrupt execution and immediately returns `tool_calls` message when an Agent tries to call a function           | `True`         |
+| **stream**               | `bool`  | If `True`, enables streaming responses                                                                                        | `False`        |
+| **debug**                | `bool`  | If `True`, enables debug logging                                                                                              | `False`        |
 
 Once `client.run()` is finished (after potentially multiple calls to agents and tools) it will return a `Response` containing all the relevant updated state. Specifically, the new `messages`, the last `Agent` to be called, and the most up-to-date `context_variables`. You can pass these values (plus new user messages) in to your next execution of `client.run()` to continue the interaction where it left off – much like `chat.completions.create()`. (The `run_demo_loop` function implements an example of a full execution loop in `/swarm/repl/repl.py`.)
 
