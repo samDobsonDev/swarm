@@ -8,7 +8,7 @@ from typing import List, Any, Generator
 # Package/library imports
 from openai import OpenAI, Stream
 from openai.types.chat import ChatCompletionMessage, ChatCompletionChunk
-from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall, Function
+from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
 
 # Local imports
 from .util import function_to_json, debug_print
