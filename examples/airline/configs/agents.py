@@ -10,8 +10,8 @@ def transfer_to_flight_modification():
     return flight_modification
 
 
-def transfer_to_flight_cancel():
-    return flight_cancel
+def transfer_to_flight_cancellation():
+    return flight_cancellation
 
 
 def transfer_to_flight_change():
@@ -52,11 +52,11 @@ flight_modification = Agent(
       You are an expert customer service agent deciding which sub intent the user should be referred to.
 You already know the intent is for flight modification related question. First, look at message history and see if you can determine if the user wants to cancel or change their flight.
 Ask user clarifying questions until you know whether or not it is a cancel request or change flight request. Once you know, call the appropriate transfer function. Either ask clarifying questions, or call one of your functions, every time.""",
-    functions=[transfer_to_flight_cancel, transfer_to_flight_change, transfer_to_triage],
+    functions=[transfer_to_flight_cancellation, transfer_to_flight_change, transfer_to_triage],
     parallel_tool_calls=False,
 )
 
-flight_cancel = Agent(
+flight_cancellation = Agent(
     name="Flight Cancellation Agent",
     instructions=STARTER_PROMPT + FLIGHT_CANCELLATION_POLICY,
     functions=[

@@ -11,7 +11,7 @@ def visualize_agents():
     agent_names = [
         'triage_agent',
         'flight_modification',
-        'flight_cancel',
+        'flight_cancellation',
         'flight_change',
         'lost_baggage'
     ]
@@ -34,7 +34,7 @@ def visualize_agents():
 
             # Check if the function is a transfer function
             if function_name.startswith('transfer_to_'):
-                # Extract the target agent name from the function name
+                # Extract the target agent name from the transfer function name. This means they have to be the same!
                 target_agent_name = function_name.replace('transfer_to_', '').replace('_', ' ').title() + ' Agent'
                 if target_agent_name in agents:
                     dot.edge(function_name, target_agent_name)
