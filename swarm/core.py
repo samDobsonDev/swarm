@@ -1,6 +1,7 @@
 # Standard library imports
 import copy
 import json
+import logging
 from collections import defaultdict
 from typing import List, Any, Generator
 
@@ -10,7 +11,7 @@ from openai.types.chat import ChatCompletionMessage, ChatCompletionChunk
 from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall, Function
 
 # Local imports
-from .util import function_to_json, debug_print, merge_chunk
+from .util import function_to_json, debug_print
 from .types import Agent, AgentFunction, Response, Result
 
 __CTX_VARS_NAME__ = "context_variables"
@@ -60,7 +61,7 @@ def handle_tool_calls(
         if callable(func) and hasattr(func, '__code__'):  # Ensure func is callable and has a __code__ attribute
             if __CTX_VARS_NAME__ in func.__code__.co_varnames:  # Check if the function accepts context variables
                 args[__CTX_VARS_NAME__] = context_variables  # Add context variables to the arguments
-        raw_result = function_map[name](args)  # Call the function with arguments.
+        raw_result = function_map[name]()  # Call the function with arguments. TODO: Make it so functions can accepts arguments like normal
         result: Result = handle_function_result(raw_result, debug)  # Process the function result
         partial_response.messages.append(  # Add the function result to the response messages
             {
@@ -76,19 +77,18 @@ def handle_tool_calls(
     return partial_response  # Return the constructed response
 
 class Swarm:
-    def __init__(self, client=None):
+    def __init__(self, client = None):
         if not client:
             client = OpenAI()
         self.client = client
 
     def get_chat_completion(
-            self,
-            agent: Agent,  # The agent to interact with
-            history: List,  # The list of messages (conversation history)
-            context_variables: dict,  # Contextual variables for the conversation
-            model_override: str,  # Optional model override
-            stream: bool,  # Whether to stream the response
-            debug: bool,  # Whether to enable debug mode
+        self,
+        agent: Agent,  # The agent to interact with
+        history: List,  # The list of messages (conversation history)
+        context_variables: dict,  # Contextual variables for the conversation
+        model_override: str,  # Optional model override
+        debug: bool,  # Whether to enable debug mode
     ) -> ChatCompletionMessage | Stream[ChatCompletionChunk]:  # Return type can be a ChatCompletionMessage or a stream of ChatCompletionChunks
         context_variables = defaultdict(str,context_variables)  # Initialize context variables with default string values
         instructions = (  # Determine the instructions for the agent
@@ -109,105 +109,12 @@ class Swarm:
             "messages": messages,  # Include the messages
             "tools": tools or None,  # Include tools if available
             "tool_choice": agent.tool_choice,  # Specify the tool choice
-            "stream": stream,  # Specify whether to stream the response
         }
-        if tools:  # If tools are available
-            create_params["parallel_tool_calls"] = agent.parallel_tool_calls  # Allow parallel tool calls if supported
+        if tools:  # If tools are available...
+            create_params["parallel_tool_calls"] = agent.parallel_tool_calls  # ...allow parallel tool calls
         # Debug print the full create_params object
         debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=4))  # Log the parameters if debugging
         return self.client.chat.completions.create( **create_params)  # Make the chat completion request with the prepared parameters
-
-    def run_and_stream(
-        self,
-        agent: Agent,
-        messages: List,
-        context_variables: dict = {},
-        model_override: str = None,
-        debug: bool = False,
-        max_sequential_turns: int = float("inf"),
-        execute_tools: bool = True,
-    ):
-        active_agent = agent
-        context_variables = copy.deepcopy(context_variables)
-        history = copy.deepcopy(messages)
-        init_len = len(messages)
-
-        while len(history) - init_len < max_sequential_turns:
-
-            message = {
-                "content": "",
-                "sender": agent.name,
-                "role": "assistant",
-                "function_call": None,
-                "tool_calls": defaultdict(
-                    lambda: {
-                        "function": {"arguments": "", "name": ""},
-                        "id": "",
-                        "type": "",
-                    }
-                ),
-            }
-
-            # get completion with current history, agent
-            completion = self.get_chat_completion(
-                agent=active_agent,
-                history=history,
-                context_variables=context_variables,
-                model_override=model_override,
-                stream=True,
-                debug=debug,
-            )
-
-            yield {"delim": "start"}
-            for chunk in completion:
-                delta = json.loads(chunk.choices[0].delta.json())
-                if delta["role"] == "assistant":
-                    delta["sender"] = active_agent.name
-                yield delta
-                delta.pop("role", None)
-                delta.pop("sender", None)
-                merge_chunk(message, delta)
-            yield {"delim": "end"}
-
-            message["tool_calls"] = list(
-                message.get("tool_calls", {}).values())
-            if not message["tool_calls"]:
-                message["tool_calls"] = None
-            debug_print(debug, "Received completion:", message)
-            history.append(message)
-
-            if not message["tool_calls"] or not execute_tools:
-                debug_print(debug, "Ending turn.")
-                break
-
-            # convert tool_calls to objects
-            tool_calls = []
-            for tool_call in message["tool_calls"]:
-                function = Function(
-                    arguments=tool_call["function"]["arguments"],
-                    name=tool_call["function"]["name"],
-                )
-                tool_call_object = ChatCompletionMessageToolCall(
-                    id=tool_call["id"], function=function, type=tool_call["type"]
-                )
-                tool_calls.append(tool_call_object)
-
-            # handle function calls, updating context_variables, and switching agents
-            partial_response = handle_tool_calls(
-                tool_calls, active_agent.functions, context_variables, debug
-            )
-            history.extend(partial_response.messages)
-            context_variables.update(partial_response.context_variables)
-            if partial_response.agent:
-                active_agent = partial_response.agent
-
-        yield {
-            "response": Response(
-                messages=history[init_len:],
-                agent=active_agent,
-                context_variables=context_variables,
-            )
-        }
 
     def run(
         self,
@@ -215,24 +122,14 @@ class Swarm:
         messages: List,  # The list of messages (conversation history)
         context_variables = None,  # Contextual variables for the conversation
         model_override: str = None,  # Optional model override
-        stream: bool = False,  # Whether to stream the response
         debug: bool = False,  # Whether to enable debug mode
         max_sequential_turns: int = float("inf"),  # The amount of sequential turns the assistant can have before returning back to the user, default to positive infinity
         execute_tools: bool = True,  # Whether to execute tool calls
     ) -> Generator[dict[str, str] | dict[str, Response] | Any, Any, None] | Response:
+        logging.basicConfig(level=logging.ERROR)
         # Initialize context_variables as an empty dictionary if not provided
         if context_variables is None:
             context_variables = {}
-        if stream:  # Check if streaming is enabled
-            return self.run_and_stream(  # Use the streaming function if enabled
-                agent=agent,
-                messages=messages,
-                context_variables=context_variables,
-                model_override=model_override,
-                debug=debug,
-                max_sequential_turns=max_sequential_turns,
-                execute_tools=execute_tools,
-            )
         active_agent = agent  # Set the active agent
         context_variables = copy.deepcopy(context_variables)  # Deep copy context variables
         history = copy.deepcopy(messages)  # Deep copy the message history
@@ -245,7 +142,6 @@ class Swarm:
                 history=history,
                 context_variables=context_variables,
                 model_override=model_override,
-                stream=stream,
                 debug=debug,
             )
             message = completion.choices[0].message  # Extract the message from the completion
