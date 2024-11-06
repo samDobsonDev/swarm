@@ -35,4 +35,4 @@ def run_demo_loop(
         total_tokens_used += response.tokens_used # Update the total tokens used
         debug_print(debug, f"Total tokens used in this session: {total_tokens_used}") # Print the total tokens used so far in the session
         messages.extend(response.messages) # Extend the conversation history with the agent's response
-        agent = response.agent # Update the current agent if a handoff occurred
+        agent = response.agent # Update the current agent if a transfer occurred
