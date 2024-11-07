@@ -2,8 +2,7 @@ import datetime
 import random
 
 import database
-from swarm import Agent
-from swarm.repl import run_demo_loop
+from swarm import Agent, run_demo_loop
 
 
 def refund_item(user_id, item_id):

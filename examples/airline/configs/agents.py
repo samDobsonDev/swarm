@@ -5,7 +5,6 @@ from examples.airline.data.routines.prompts import STARTER_PROMPT
 
 from swarm import Agent
 
-
 def transfer_to_flight_modification():
     return flight_modification
 

@@ -1,4 +1,4 @@
-from .core import Swarm
-from .types import Agent, Response
+from .core import Swarm, Agent, Response, run_demo_loop
 
-__all__ = ["Swarm", "Agent", "Response"]
+# This specifies the things that other pieces of code can import via the "swarm" package
+__all__ = ["Swarm", "Agent", "Response", "run_demo_loop"]
