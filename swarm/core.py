@@ -234,7 +234,7 @@ class Swarm:
             '''
             TODO: Need to modify this so sub-agent completions and tool calls aren't added to the Triage Agent's history.
             The Triage Agent doesn't need to know about the inner workings of the Agents that it invokes, just the final result it produces...
-            Essentially we need to maintain a new history for each agent we invoke until we're finished and need to go back to the Triage agent, when the histories can be wiped.
+            Essentially we need to maintain a new history for each agent we invoke until we're finished (no more Agent transfers or tool calls) and need to go back to the Triage agent, when the histories can be wiped.
             This is very close though...
             '''
 
