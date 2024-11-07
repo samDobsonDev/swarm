@@ -7,7 +7,7 @@ from typing import List, Any, Generator
 
 # Package/library imports
 from openai import OpenAI, Stream
-from openai.types.chat import ChatCompletionMessage, ChatCompletionChunk
+from openai.types.chat import ChatCompletionMessage, ChatCompletion, ChatCompletionChunk
 from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
 
 # Local imports
@@ -41,12 +41,12 @@ def handle_tool_calls(
     debug: bool,  # Debug flag for logging
 ) -> Response:  # Returns a Response object
     function_map = {f.__name__: f for f in functions}  # Map function names to function objects
-    partial_response = Response(messages=[], agent=None, context_variables={})  # Initialize an empty Response object
+    tool_result = Response(messages=[], agent=None, context_variables={})  # Initialize an empty Response object
     for tool_call in tool_calls:  # Iterate over each tool call
         name = tool_call.function.name  # Get the function name from the tool call
         if name not in function_map:  # Check if the function is not in the map
             debug_print(debug, f"Tool {name} not found in function map.")  # Log missing tool
-            partial_response.messages.append(  # Add an error message to the response
+            tool_result.messages.append(  # Add an error message to the response
                 {
                     "role": "tool",
                     "tool_call_id": tool_call.id,
@@ -63,7 +63,7 @@ def handle_tool_calls(
                 args[__CTX_VARS_NAME__] = context_variables  # Add context variables to the arguments
         raw_result = function_map[name]()  # Call the function with arguments. TODO: Make it so functions can accepts arguments like normal
         result: Result = handle_function_result(raw_result, debug)  # Process the function result
-        partial_response.messages.append(  # Add the function result to the response messages
+        tool_result.messages.append(  # Add the function result to the response messages
             {
                 "role": "tool",
                 "tool_call_id": tool_call.id,
@@ -71,10 +71,10 @@ def handle_tool_calls(
                 "content": result.value,
             }
         )
-        partial_response.context_variables.update(result.context_variables)  # Update context variables in the response
+        tool_result.context_variables.update(result.context_variables)  # Update context variables in the response
         if result.agent:  # Check if the result includes an agent
-            partial_response.agent = result.agent  # Set the agent in the response
-    return partial_response  # Return the constructed response
+            tool_result.agent = result.agent  # Set the agent in the response
+    return tool_result  # Return the constructed response
 
 class Swarm:
     def __init__(self, client = None):
@@ -89,9 +89,9 @@ class Swarm:
         context_variables: dict,  # Contextual variables for the conversation
         model_override: str,  # Optional model override
         debug: bool,  # Whether to enable debug mode
-    ) -> ChatCompletionMessage | Stream[ChatCompletionChunk]:  # Return type can be a ChatCompletionMessage or a stream of ChatCompletionChunks
+    ) -> ChatCompletion:
         context_variables = defaultdict(str,context_variables)  # Initialize context variables with default string values
-        instructions = (  # Determine the instructions for the agent
+        instructions = (  # Determine the instructions/system message for the agent
             agent.instructions(context_variables)  # Call the instructions function if it's callable
             if callable(agent.instructions)
             else agent.instructions  # Use the instructions string directly if not callable
@@ -125,7 +125,7 @@ class Swarm:
         debug: bool = False,  # Whether to enable debug mode
         max_sequential_turns: int = float("inf"),  # The amount of sequential turns the assistant can have before returning back to the user, default to positive infinity
         execute_tools: bool = True,  # Whether to execute tool calls
-    ) -> Generator[dict[str, str] | dict[str, Response] | Any, Any, None] | Response:
+    ) -> Response:
         logging.basicConfig(level=logging.ERROR)
         # Initialize context_variables as an empty dictionary if not provided
         if context_variables is None:
@@ -137,33 +137,108 @@ class Swarm:
         tokens_used = 0  # Initialize token usage counter
         # While the length of the conversation history - the initial length of the conversation history is less than max_sequential_turns, and we have an active agent...
         while len(history) - init_len < max_sequential_turns and active_agent:
-            completion: ChatCompletionMessage = self.get_chat_completion(  # Get chat completion with current history and active agent
+            completion: ChatCompletion = self.get_chat_completion(  # Get ChatCompletion with current history and active agent
                 agent=active_agent,
                 history=history,
                 context_variables=context_variables,
                 model_override=model_override,
                 debug=debug,
             )
-            message = completion.choices[0].message  # Extract the message from the completion
-            debug_print(debug, "Received completion:", message)  # Debug print the received message
-            message.sender = active_agent.name  # Set the sender of the message, this is used in pretty_print_messages in repl.py
-            history.append(  # Append the message to the history
-                json.loads(message.model_dump_json())  # Convert message to JSON
-            )
+            message: ChatCompletionMessage = completion.choices[0].message  # Extract the first ChatCompletionMessage from the ChatCompletion
+            debug_print(debug, "Received completion:", str(message))  # Print the received ChatCompletionMessage
+            message.sender = active_agent.name  # Set the sender of the ChatCompletionMessage, this is used in pretty_print_messages() in repl.py
+            history.append(json.loads(message.model_dump_json()))  # Append the message to the history by converting it to JSON
             tokens_used += completion.usage.total_tokens  # Update tokens used in interaction (prompt + response)
-            if not message.tool_calls or not execute_tools:  # Check if there are no tool calls in the response or tools should not be executed
+            if not message.tool_calls or not execute_tools:  # Check if there are no tool calls in the ChatCompletionMessage, or if tools should not be executed
                 debug_print(debug, "Ending turn.")  # Debug print ending turn
-                break  # Exit the loop
-            partial_response = handle_tool_calls(  # Handle tool calls
-                message.tool_calls, active_agent.functions, context_variables, debug
+                break  # Exit the while loop
+            tool_results: Response = handle_tool_calls(  # Call chosen tools and retrieve result
+                tool_calls = message.tool_calls, functions = active_agent.functions, context_variables = context_variables, debug = debug
             )
-            history.extend(partial_response.messages)  # Extend history with partial response messages
-            context_variables.update(partial_response.context_variables)  # Update context variables
-            if partial_response.agent and partial_response.agent != active_agent:  # Check if there's a new agent and it's different
-                active_agent = partial_response.agent  # Switch to the new agent
-        return Response(  # Return the response
-            messages=history[init_len:],  # Messages from the initial length to the end of the array
+            history.extend(tool_results.messages)  # Extend history with tool results
+            context_variables.update(tool_results.context_variables)  # Update context variables
+            if tool_results.agent and tool_results.agent != active_agent:  # If there's a new agent, and it's different to the current...
+                active_agent = tool_results.agent  # ...switch to the new agent
+        return Response(
+            messages=history,  # Messages from the initial length of history to the end of the array (i.e, all new messages generated in this interaction)
             agent=active_agent,  # The active agent
             context_variables=context_variables,  # Updated context variables
             tokens_used=tokens_used  # Total tokens used
+        )
+
+    def run_test(
+            self,
+            agent: Agent,  # The triage agent
+            messages: List,  # The list of messages (conversation history)
+            context_variables=None,  # Contextual variables for the conversation
+            model_override: str = None,  # Optional model override
+            debug: bool = False,  # Whether to enable debug mode
+            max_sequential_turns: int = float("inf"),
+            # The amount of sequential turns the assistant can have before returning back to the user, default to positive infinity
+            execute_tools: bool = True,  # Whether to execute tool calls
+    ) -> Response:
+        logging.basicConfig(level=logging.ERROR)
+        if context_variables is None:
+            context_variables = {}
+        context_variables = copy.deepcopy(context_variables)
+        history = copy.deepcopy(messages)
+        tokens_used = 0
+
+        # Main loop for the triage agent
+        while len(history) < max_sequential_turns:
+            completion: ChatCompletion = self.get_chat_completion(
+                agent=agent,
+                history=history,
+                context_variables=context_variables,
+                model_override=model_override,
+                debug=debug,
+            )
+            message: ChatCompletionMessage = completion.choices[0].message
+            debug_print(debug, "Received completion:", str(message))
+            message.sender = agent.name
+            history.append(json.loads(message.model_dump_json()))
+            tokens_used += completion.usage.total_tokens
+
+            if not message.tool_calls or not execute_tools:
+                debug_print(debug, "Ending turn.")
+                break
+
+            # Handle tool calls and agent handovers
+            tool_results: Response = handle_tool_calls(
+                tool_calls=message.tool_calls,
+                functions=agent.functions,
+                context_variables=context_variables,
+                debug=debug,
+            )
+
+            # If a new agent is involved, handle it separately
+            if tool_results.agent and tool_results.agent != agent:
+                # Isolate context for the new agent
+                agent_context = {"task": tool_results.messages}
+                agent_response = self.run_test(
+                    agent=tool_results.agent,
+                    # TODO: Need to modify this so that the Agent has at least some context about what's going on in the conversation and why it's been invoked, rather than nothing...
+                    messages=[],
+                    context_variables=agent_context,
+                    model_override=model_override,
+                    debug=debug,
+                    max_sequential_turns=max_sequential_turns,
+                    execute_tools=execute_tools,
+                )
+                # Compile results back to the triage agent
+                tool_results.messages.extend(agent_response.messages)
+                context_variables.update(agent_response.context_variables)
+            history.extend(tool_results.messages)
+            context_variables.update(tool_results.context_variables)
+
+            '''
+            TODO: Need to modify this so sub-agent completions and tool calls aren't added to the Triage Agent's history.
+            The Triage Agent doesn't need to know about the inner workings of the Agents that it invokes, just the final result it produces...
+            '''
+
+        return Response(
+            messages=history,
+            agent=agent,
+            context_variables=context_variables,
+            tokens_used=tokens_used
         )

@@ -30,7 +30,7 @@ def run_demo_loop(
     while True:
         user_input = input("\033[90mUser\033[0m: ") # Prompt the user for input...
         messages.append({"role": "user", "content": user_input}) # ...and append it to the conversation history
-        response = client.run(agent = agent, messages = messages, context_variables = context_variables, debug = debug)  # Run the client with the current agent, conversation history and context variables
+        response = client.run_test(agent = agent, messages = messages, context_variables = context_variables, debug = debug)  # Run the client with the current agent, conversation history and context variables
         pretty_print_messages(response.messages)
         total_tokens_used += response.tokens_used # Update the total tokens used
         debug_print(debug, f"Total tokens used in this session: {total_tokens_used}") # Print the total tokens used so far in the session

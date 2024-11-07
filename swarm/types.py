@@ -20,8 +20,8 @@ class Agent(BaseModel):
     """
     name: str = "Agent"
     model: str = "gpt-4o"
-    # Use Union to allow instructions to be either a string or a callable that takes no arguments and returns a string
-    instructions: Union[str, Callable[[], str]] = "You are a helpful agent."
+    # Use Union to allow instructions to be either a string or a callable that takes a dictionary input and returns a string
+    instructions: Union[str, Callable[[dict], str]] = "You are a helpful agent."
     functions: List[AgentFunction] = []
     tool_choice: str = None
     # Gives the option for the model to pick multiple tools in a single response, indicating that they should be called in parallel.
