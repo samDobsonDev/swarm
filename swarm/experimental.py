@@ -1069,7 +1069,7 @@ class LocalEngine:
         self.global_context['history'] = []
 
 class Swarm:
-    def __init__(self, engine_name, tasks=[], persist=False):
+    def __init__(self, engine_name, tasks=[], persist = False):
         self.tasks = tasks
         self.engine_name = engine_name
         self.engine = None
@@ -1251,15 +1251,14 @@ def main():
         validate_all_assistants()
     except:
         raise Exception("Validation failed")
-    swarm = Swarm(
-        engine_name=engine_name, persist=persist)
+    swarm = Swarm(engine_name = engine_name, persist = persist)
     if args.test is not None:
         test_files = args.test
         if len(test_files) == 0:
             test_file_paths = [f"{test_root}/{test_file}"]
         else:
             test_file_paths = [f"{test_root}/{file}" for file in test_files]
-        swarm = Swarm(engine_name='local')
+        swarm = Swarm(engine_name = 'local')
         swarm.deploy(test_mode=True, test_file_paths=test_file_paths)
     elif args.input:
         # Interactive mode for adding tasks
