@@ -331,7 +331,8 @@ class Assistant(BaseModel):
                     print(f"{Colors.HEADER}Assistant:{Colors.ENDC} {message['content']}")
             print("\n")
 
-    def evaluate(self, client, task, plan_log):
+    @staticmethod
+    def evaluate(client, task, plan_log):
         """Evaluates the assistant's performance on a task"""
         output = get_completion(client, [{'role': 'user', 'content': EVALUATE_TASK_PROMPT.format(task.description, plan_log)}])
         output.content = output.content.replace("'",'"')
@@ -351,7 +352,7 @@ class Assistant(BaseModel):
             json.dump(self.context['history'], file)
 
     def pass_context(self,assistant):
-        '''Passes the context of the conversation to the assistant'''
+        """Passes the context of the conversation to the assistant"""
         assistant.context['history'] = self.context['history']
 
 class Parameter(BaseModel):
@@ -716,7 +717,7 @@ class Run:
             return response_string
 
 class LocalEngine:
-    def __init__(self, client, tasks, persist=False):
+    def __init__(self, client, tasks, persist = False):
         self.client = client
         self.assistants = []
         self.last_assistant = None
@@ -874,7 +875,7 @@ class LocalEngine:
                         plan_log['step_output'].append(f'Tool {step["tool"]} execution skipped by user! Task not completed.')
                         continue
                     assistant.add_assistant_message(f"Tool {step['tool']} execution approved by user.")
-            tool_output = self.handle_tool_call(assistant, step, test_mode)
+            tool_output = self.handle_tool_call(step)
             plan_log['step'].append(step)
             plan_log['step_output'].append(tool_output)
             if task.iterate and not is_dict_empty(plan_log) and plan:
