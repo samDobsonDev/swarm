@@ -211,7 +211,7 @@ class Swarm:
                 debug=debug,
             )
 
-            # If a new agent is involved, handle it separately
+            # If a new agent needs to be invoked, handle it in a separate chat completion
             if tool_results.agent and tool_results.agent != agent:
                 # Isolate context for the new agent
                 agent_context = {"task": tool_results.messages}
@@ -234,6 +234,8 @@ class Swarm:
             '''
             TODO: Need to modify this so sub-agent completions and tool calls aren't added to the Triage Agent's history.
             The Triage Agent doesn't need to know about the inner workings of the Agents that it invokes, just the final result it produces...
+            Essentially we need to maintain a new history for each agent we invoke until we're finished and need to go back to the Triage agent, when the histories can be wiped.
+            This is very close though...
             '''
 
         return Response(
