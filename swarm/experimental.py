@@ -223,7 +223,7 @@ test_file = 'test_prompts.jsonl'
 tasks_path = 'swarm_tasks.json'
 
 # Options are 'assistants' or 'local'
-engine_name = 'assistants'
+engine_name = 'local'
 max_iterations = 5
 persist = False
 
