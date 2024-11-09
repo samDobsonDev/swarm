@@ -223,7 +223,7 @@ test_file = 'test_prompts.jsonl'
 tasks_path = 'swarm_tasks.json'
 
 # Options are 'assistants' or 'local'
-engine_name = 'local'
+engine_name = 'assistants'
 max_iterations = 5
 persist = False
 
@@ -264,6 +264,8 @@ def get_completion(
     }
     if tools and isinstance(tools, list):
         request_params["tools"] = tools  # Tools are already in dictionary format
+
+    logging.info(f"Calling chat.completions.create with parameters: {request_params}")
 
     # Make the API call with the possibility of streaming
     if stream:
@@ -421,13 +423,14 @@ class AssistantsEngine:
                     assistant_tools_names = assistant_config.get('tools', [])
                     # Build the list of tool definitions for this assistant
                     assistant_tools = [tool_defs[name] for name in assistant_tools_names if name in tool_defs]
-                    # Create or update the assistant instance
-                    existing_assistants = self.client.beta.assistants.list()
-                    loaded_assistant = next((a for a in existing_assistants if a.name == assistant_name), None)
-                    if loaded_assistant:
+                    existing_assistants = self.client.beta.assistants.list() # Gather pre-existing assistants
+                    loaded_assistant = next((a for a in existing_assistants if a.name == assistant_name), None) # If one exists with the same name as assistant_name, retrieve it
+                    # If we didn't find one...
+                    if not loaded_assistant:
                         assistant_tools = [{'type': 'function', 'function': tool_defs[name]} for name in assistant_tools_names if name in tool_defs]
                         assistant_config['tools'] = assistant_tools
                         assistant_config['name']=assistant_name
+                        # ...create it and updated loaded_assistant
                         loaded_assistant = self.client.beta.assistants.create(**assistant_config)
                         print(f"Assistant '{assistant_name}' created.\n")
                     asst_object = Assistant(name=assistant_name, log_flag=log_flag, instance=loaded_assistant, tools=assistant_tools)
@@ -483,7 +486,7 @@ class AssistantsEngine:
         return response.content
 
 
-    def run_request(self, request, assistant,test_mode):
+    def run_request(self, request, assistant: Assistant, test_mode):
         """
         Run the request with the selected assistant and monitor its status.
         """
@@ -538,9 +541,9 @@ class AssistantsEngine:
             spec = importlib.util.spec_from_file_location(f"{tool_name}_handler", handler_path)
             tool_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(tool_module)
-            tool_handler = getattr(tool_module, tool_name+ '_assistants')
+            tool_handler = getattr(tool_module, tool_name)
             # Prepare the arguments for the handler function
-            handler_args = {'tool_id': tool_call.id}
+            handler_args = {}
             tool_args = json.loads(tool_call.function.arguments)
             for arg_name, arg_value in tool_args.items():
                 if arg_value is not None:
@@ -1174,12 +1177,11 @@ def validate_all_assistants():
 
 def prep_data(generate_new_embeddings=False):
     logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
     client = OpenAI()
     embedding_model = "text-embedding-3-large"
     article_list = os.listdir('data')
     articles = []
-    logger.info("Starting to process articles...")
+    logging.info("Starting to process articles...")
     embedding_dir = 'embeddings' # Directory to store and retrieve embeddings
     os.makedirs(embedding_dir, exist_ok=True)
     for x in article_list:
@@ -1187,34 +1189,34 @@ def prep_data(generate_new_embeddings=False):
         with open(article_path) as f:
             data = json.load(f)
             articles.append(data)
-            logger.info(f"Loaded article: {x}")
+            logging.info(f"Loaded article: {x}")
     for i, x in enumerate(articles):
         embedding_file = os.path.join(embedding_dir, f"{x['title']}.json")
         if generate_new_embeddings or not os.path.exists(embedding_file):
             try:
                 embedding = client.embeddings.create(model=embedding_model, input=x['text'])
                 articles[i].update({"embedding": embedding.data[0].embedding})
-                logger.info(f"Generated embedding for article: {x['title']}")
+                logging.info(f"Generated embedding for article: {x['title']}")
                 # Save the embedding to a file
                 with open(embedding_file, 'w') as ef:
                     json.dump({"embedding": embedding.data[0].embedding}, ef)
-                    logger.info(f"Saved embedding for article: {x['title']} to {embedding_file}")
+                    logging.info(f"Saved embedding for article: {x['title']} to {embedding_file}")
             except Exception as e:
-                logger.error(f"Error processing article: {x['title']}, Error: {e}")
+                logging.error(f"Error processing article: {x['title']}, Error: {e}")
         else:
             with open(embedding_file, 'r') as ef: # Load the existing embedding
                 embedding_data = json.load(ef)
                 articles[i].update({"embedding": embedding_data['embedding']})
-                logger.info(f"Loaded existing embedding for article: {x['title']}")
+                logging.info(f"Loaded existing embedding for article: {x['title']}")
     qdrant = qdrant_client.QdrantClient(host='localhost')
     collection_name = 'help_center'
     vector_size = len(articles[0]['embedding'])
     article_df = pd.DataFrame(articles)
-    logger.info("Checking if collection exists...")
+    logging.info("Checking if collection exists...")
     collections = qdrant.get_collections()
     collection_names = [collection.name for collection in collections.collections]
     if collection_name not in collection_names:
-        logger.info("Collection does not exist. Creating new collection...")
+        logging.info("Collection does not exist. Creating new collection...")
         qdrant.create_collection(
             collection_name=collection_name,
             vectors_config={
@@ -1225,8 +1227,8 @@ def prep_data(generate_new_embeddings=False):
             }
         )
     else:
-        logger.info("Collection already exists.")
-    logger.info("Populating collection with vectors...")
+        logging.info("Collection already exists.")
+    logging.info("Populating collection with vectors...")
     # Populate collection with vectors
     qdrant.upsert(
         collection_name=collection_name,
@@ -1241,7 +1243,7 @@ def prep_data(generate_new_embeddings=False):
             for k, v in article_df.iterrows()
         ],
     )
-    logger.info("Data preparation complete.")
+    logging.info("Data preparation complete.")
 
 def main():
     prep_data()

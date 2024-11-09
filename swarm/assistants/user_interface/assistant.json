@@ -5,7 +5,6 @@
         "log_flag": false,
         "tools":["query_docs",
         "submit_ticket",
-        "send_email"],
-        "planner": "sequential"
+        "send_email"]
     }
 ]
