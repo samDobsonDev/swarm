@@ -2,10 +2,10 @@ from graphviz import Digraph
 from examples.airline.configs.agents import triage_agent
 from swarm.multiagent import Agent
 
-def visualize_agents(agent: Agent):
-    dot = Digraph(comment='Multi-Agent Workflow', graph_attr={'rankdir': 'LR', 'splines': 'polyline'})
-    agents = {agent.name: agent}  # Dictionary to hold agent objects
-    agent_queue = [agent]  # Queue for processing agents
+def visualize_agents(initial_agent: Agent):
+    dot = Digraph(graph_attr={'rankdir': 'LR', 'splines': 'polyline'})
+    agents = {initial_agent.name: initial_agent}  # Dictionary to hold agent objects
+    agent_queue = [initial_agent]  # Queue for processing agents
 
     # Process each agent in the queue
     while agent_queue:
