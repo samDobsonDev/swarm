@@ -20,5 +20,4 @@ def example(raw_resume: str) -> Resume:
   return response
 
 if __name__ == "__main__":
-    resume = example(resume_text)
-    print(resume)
+    print(example(resume_text))
