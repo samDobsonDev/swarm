@@ -252,7 +252,24 @@ class Swarm:
     TODO: Each agent receives the full conversation history thus far as it is constantly amended to by each agent. The only thing that changes is the system message
     that the agent receives. This means that agents are potentially receiving unnecessary information from the conversation history in order to complete their task.
     I need to devise a way in which when we transfer to another agent, it only receives the context it needs from the conversation history, and not the entire thing.
-    This way, we can keep the agent on task and minimize hallucinations.
+    This way, we can keep the agent on task and minimize hallucinations. 
+    
+    One way to approach this might be having the agents share some overall state, rather than simply amending the conversation history with more and more
+    messages (that includes tools calls, results of tool calls, agent transfer and normal conversation history) like we're doing now, which looks bloated.
+    This state can include any agent transfers, tool calls and their results by agents, as well as the conversation history. This state
+    would also be in chronological order to provide context to the LLM as to when tool calls, agent transfers or normal conversation occurred.
+    This means we essentially provide a timeline to the LLM. In this approach, the user wouldn't be communicating exclusively with the top-level/centralized agent in the conversation, such as a Triage Agent, but rather
+    would be communicating with whatever the active agent is at the time. 
+    
+    However, there is a downside to this approach. Take staff in a store as an example. Let's say a customer walks in a says to the store manager "Hi there, I need to return this device, it doesn't work. Can I get a replacement?".
+    The store manager analyses the situation and the device, where they concur that the item is indeed damaged, the battery is broken. The store manager decides to hand this over to a supervisor, to see if the purchase is eligible for
+    a replacement, or if the only option is a refund. The supervisor doesn't need to know the details of the item and how it's damaged, just that the store manager has asked them to check if the purchase is eligible
+    for a replacement or refund, indicating that the store manager has previously checked the item and approved the return. The supervisor performs their checks and determines that the customer can receive a replacement device.
+    The supervisor hands this over to the stock clerk to locate the replacement product. The stock clerk doesn't need to know context of what this item is for, or that it's a replacement for a damaged device, or how the device
+    was damaged, just that it needs to locate the replacement product. See where I'm going with this? The context provided to each staff member in the store is limited to only essential information in order to allow the
+    staff member to complete their task. They don't need to know the entire story from when the customer entered the store. The above approach neglects this, and allows the stock clerk to gain insight into how the product the
+    customer initially bought was damaged, which is just unnecessary information and doesn't impact the task of the stock clerk in anyway, other than just overloading it with irrelevant information. 
+    It isn't in the best interest of a sub-agent to know the entire context of the session, just the relevant details to ensure the agent stays on task and is as efficient as possible
     """
     def run(
         self,
