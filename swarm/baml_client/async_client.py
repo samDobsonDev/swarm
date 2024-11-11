@@ -54,7 +54,7 @@ class BamlAsyncClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> types.MyClass:
+    ) -> List[types.MyClass]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb
@@ -71,7 +71,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
       )
-      return cast(types.MyClass, raw.cast_to(types, types))
+      return cast(List[types.MyClass], raw.cast_to(types, types))
     
 
 
@@ -88,7 +88,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Optional[types.MyClass], types.MyClass]:
+    ) -> baml_py.BamlStream[List[Optional[types.MyClass]], List[types.MyClass]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb
@@ -107,10 +107,10 @@ class BamlStreamClient:
         __cr__,
       )
 
-      return baml_py.BamlStream[Optional[types.MyClass], types.MyClass](
+      return baml_py.BamlStream[List[Optional[types.MyClass]], List[types.MyClass]](
         raw,
-        lambda x: cast(Optional[types.MyClass], x.cast_to(types, partial_types)),
-        lambda x: cast(types.MyClass, x.cast_to(types, types)),
+        lambda x: cast(List[Optional[types.MyClass]], x.cast_to(types, partial_types)),
+        lambda x: cast(List[types.MyClass], x.cast_to(types, types)),
         self.__ctx_manager.get(),
       )
     

@@ -1,21 +1,13 @@
+from typing import List
+
 from baml_client.sync_client import b as baml
 from baml_client.types import MyClass
 
 resume_text = """
-      John Doe
-
-      Education
-      - University of California, Berkeley
-        - B.S. in Computer Science
-        - 2020
-
-      Skills
-      - Python
-      - Java
-      - C++
+      I want to refund my item. I also want to cancel the order I made last week
     """
 
-def example(u: str) -> MyClass:
+def example(u: str) -> List[MyClass]:
   response = baml.ClassifyMessageWithSymbol(u)
   return response
 
