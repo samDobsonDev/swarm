@@ -1,5 +1,5 @@
-from baml_client.sync_client import b
-from baml_client.types import Resume
+from baml_client.sync_client import b as baml
+from baml_client.types import MyClass
 
 resume_text = """
       John Doe
@@ -15,8 +15,8 @@ resume_text = """
       - C++
     """
 
-def example(raw_resume: str) -> Resume: 
-  response = b.ExtractResume(raw_resume)
+def example(u: str) -> MyClass:
+  response = baml.ClassifyMessageWithSymbol(u)
   return response
 
 if __name__ == "__main__":

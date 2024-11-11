@@ -50,11 +50,11 @@ class BamlAsyncClient:
 
 
     
-    async def ExtractResume(
+    async def ClassifyMessageWithSymbol(
         self,
-        resume_text: str,
+        input: str,
         baml_options: BamlCallOptions = {},
-    ) -> types.Resume:
+    ) -> types.MyClass:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb
@@ -63,15 +63,15 @@ class BamlAsyncClient:
       __cr__ = baml_options.get("client_registry", None)
 
       raw = await self.__runtime.call_function(
-        "ExtractResume",
+        "ClassifyMessageWithSymbol",
         {
-          "resume_text": resume_text,
+          "input": input,
         },
         self.__ctx_manager.get(),
         tb,
         __cr__,
       )
-      return cast(types.Resume, raw.cast_to(types, types))
+      return cast(types.MyClass, raw.cast_to(types, types))
     
 
 
@@ -84,11 +84,11 @@ class BamlStreamClient:
       self.__ctx_manager = ctx_manager
 
     
-    def ExtractResume(
+    def ClassifyMessageWithSymbol(
         self,
-        resume_text: str,
+        input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[partial_types.Resume, types.Resume]:
+    ) -> baml_py.BamlStream[Optional[types.MyClass], types.MyClass]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb
@@ -97,9 +97,9 @@ class BamlStreamClient:
       __cr__ = baml_options.get("client_registry", None)
 
       raw = self.__runtime.stream_function(
-        "ExtractResume",
+        "ClassifyMessageWithSymbol",
         {
-          "resume_text": resume_text,
+          "input": input,
         },
         None,
         self.__ctx_manager.get(),
@@ -107,10 +107,10 @@ class BamlStreamClient:
         __cr__,
       )
 
-      return baml_py.BamlStream[partial_types.Resume, types.Resume](
+      return baml_py.BamlStream[Optional[types.MyClass], types.MyClass](
         raw,
-        lambda x: cast(partial_types.Resume, x.cast_to(types, partial_types)),
-        lambda x: cast(types.Resume, x.cast_to(types, types)),
+        lambda x: cast(Optional[types.MyClass], x.cast_to(types, partial_types)),
+        lambda x: cast(types.MyClass, x.cast_to(types, types)),
         self.__ctx_manager.get(),
       )
     

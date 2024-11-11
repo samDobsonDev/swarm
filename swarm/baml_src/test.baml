@@ -22,51 +22,41 @@ client<llm> GPT4o {
   }
 } 
 
-class Resume {
-  name string
-  education Education[] @description("Extract in the same order listed")
-  skills string[] @description("Only include programming languages")
+enum MyClass {
+    Refund @alias("k1")
+    @description("Customer wants to refund a product")
+
+    CancelOrder @alias("k2")
+    @description("Customer wants to cancel an order")
+
+    TechnicalSupport @alias("k3")
+    @description("Customer needs help with a technical issue unrelated to account creation or login")
+
+    AccountIssue @alias("k4")
+    @description("Specifically relates to account-login or account-creation")
+
+    Question @alias("k5")
+    @description("Customer has a question")
 }
 
-class Education {
-  school string
-  degree string
-  year int
-}
-
-function ExtractResume(resume_text: string) -> Resume {
-  // see clients.baml
+function ClassifyMessageWithSymbol(input: string) -> MyClass[] {
   client GPT4o
 
-  // The prompt uses Jinja syntax. Change the models or this text and watch the prompt preview change!
   prompt #"
-    Parse the following resume and return a structured representation of the data in the schema below.
+    Classify the following INPUT into ONE
+    of the following categories:
 
-    Resume:
-    ---
-    {{ resume_text }}
-    ---
+    INPUT: {{ input }}
 
-    {# special macro to print the output instructions. #}
     {{ ctx.output_format }}
+
+    Response:
   "#
 }
 
 test Test1 {
-  functions [ExtractResume]
+  functions [ClassifyMessageWithSymbol]
   args {
-    resume_text #"
-      John Doe
-
-      Education
-      - University of California, Berkeley
-        - B.S. in Computer Science
-        - 2020
-
-      Skills
-      - Python
-      - Java
-      - C++
-    "#
+    input "I want to refund my item and cancel my other order"
   }
 }

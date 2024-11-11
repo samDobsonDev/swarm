@@ -28,17 +28,3 @@ from .types import Checked, Check
 #
 ###############################################################################
 
-
-class Education(BaseModel):
-    
-    
-    school: Optional[str] = None
-    degree: Optional[str] = None
-    year: Optional[int] = None
-
-class Resume(BaseModel):
-    
-    
-    name: Optional[str] = None
-    education: List["Education"]
-    skills: List[Optional[str]]

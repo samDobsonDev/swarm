@@ -39,16 +39,10 @@ def all_succeeded(checks: Dict[CheckName, Check]) -> bool:
 
 
 
-class Education(BaseModel):
+class MyClass(str, Enum):
     
-    
-    school: str
-    degree: str
-    year: int
-
-class Resume(BaseModel):
-    
-    
-    name: str
-    education: List["Education"]
-    skills: List[str]
+    Refund = "Refund"
+    CancelOrder = "CancelOrder"
+    TechnicalSupport = "TechnicalSupport"
+    AccountIssue = "AccountIssue"
+    Question = "Question"
