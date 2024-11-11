@@ -19,7 +19,10 @@ def debug_print(debug: bool, *args: str) -> None:
     message = " ".join(map(str, args))  # Convert all arguments to strings and join them into a single message
     print(f"\033[97m[\033[90m{timestamp}\033[97m]\033[90m {message}\033[0m")  # Print the timestamp and message with color formatting
 
-def function_to_json(func) -> dict:
+# Define a type alias for a function that can take any number of arguments and return either a string, an Agent instance, or a dictionary
+AgentFunction = Callable[..., Union[str, "Agent", dict]]
+
+def function_to_json(func: AgentFunction) -> dict:
     """
     Converts a Python function into a JSON-serializable dictionary
     that describes the function's signature, including its name,
@@ -72,9 +75,6 @@ def function_to_json(func) -> dict:
             },
         },
     }
-
-# Define a type alias for a function that can take any number of arguments and return either a string, an Agent instance, or a dictionary
-AgentFunction = Callable[..., Union[str, "Agent", dict]]
 
 class Agent(BaseModel):
     """
@@ -152,12 +152,12 @@ def handle_tool_calls(
     debug: bool,  # Debug flag for logging
 ) -> Response:  # Returns a Response object
     function_map = {f.__name__: f for f in functions}  # Map function names to function objects
-    tool_result = Response(messages=[], agent=None, context_variables={})  # Initialize an empty Response object
+    tools_response = Response(messages=[], agent=None, context_variables={})  # Initialize an empty Response object
     for tool_call in tool_calls:  # Iterate over each tool call
         name = tool_call.function.name  # Get the function name from the tool call
         if name not in function_map:  # Check if the function is not in the map
             debug_print(debug, f"Tool {name} not found in function map.")  # Log missing tool
-            tool_result.messages.append(  # Add an error message to the response
+            tools_response.messages.append(  # Add an error message to the tools_response
                 {
                     "role": "tool",
                     "tool_call_id": tool_call.id,
@@ -166,7 +166,7 @@ def handle_tool_calls(
                 }
             )
             continue  # Skip to the next tool call
-        args = json.loads(tool_call.function.arguments)  # Parse the function arguments model response JSON
+        args = json.loads(tool_call.function.arguments)  # Parse the function arguments model tools_response JSON
         debug_print(debug, f"Processing tool call: {name} with arguments {args}")  # Log the tool call processing
         func = function_map[name]  # Retrieve the function object from the map
         if callable(func) and hasattr(func, '__code__'):  # Ensure func is callable and has a __code__ attribute
@@ -174,7 +174,7 @@ def handle_tool_calls(
                 args[__CTX_VARS_NAME__] = context_variables  # Add context variables to the arguments
         raw_result = function_map[name]()  # Call the function with arguments. TODO: Make it so functions can accepts arguments like normal
         result: Result = handle_function_result(raw_result, debug)  # Process the function result
-        tool_result.messages.append(  # Add the function result to the response messages
+        tools_response.messages.append(  # Add the function result to the tools_response messages
             {
                 "role": "tool",
                 "tool_call_id": tool_call.id,
@@ -182,10 +182,10 @@ def handle_tool_calls(
                 "content": result.value,
             }
         )
-        tool_result.context_variables.update(result.context_variables)  # Update context variables in the response
+        tools_response.context_variables.update(result.context_variables)  # Update context variables in the tools_response
         if result.agent:  # Check if the result includes an agent
-            tool_result.agent = result.agent  # Set the agent in the response
-    return tool_result  # Return the constructed response
+            tools_response.agent = result.agent  # Set the agent in the tools_response
+    return tools_response  # Return the constructed tools_response
 
 class Swarm:
     def __init__(self, client = None):
@@ -208,8 +208,7 @@ class Swarm:
             else agent.instructions  # Use the instructions string directly if not callable
         )
         messages = [{"role": "system","content": instructions}] + history  # Prepend system instructions to the message history
-        tools = [function_to_json(f) for f in agent.functions]  # Convert agent functions to JSON format for tools
-        # Hide context_variables from model
+        tools = [function_to_json(func = f) for f in agent.functions]  # Convert agent functions to JSON format for tools
         for tool in tools:  # Iterate over each tool
             params = tool["function"]["parameters"]  # Access the function parameters
             params["properties"].pop(__CTX_VARS_NAME__, None)  # Remove context variables from properties
@@ -227,6 +226,34 @@ class Swarm:
         debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=4))  # Log the parameters if debugging
         return self.client.chat.completions.create( **create_params)  # Make the chat completion request with the prepared parameters
 
+    """
+    This is the current implementation of agent transfer/handover:
+    
+    1. Call LLM
+    2. LLM responds specifying it wants to use a tool or multiple tools
+    3. We invoke the LLM's chosen tools and produce a Response object. When initializing this object we set the Agent field to None.
+    For each tool we call, we use the result of the tool call to produce a Result object. Each Result contains a value and a potential Agent. 
+    The Response object has a messages field. We use the Result objects to help construct fake "LLM" response messages which we add to the conversation history.
+    Each message adheres to the following schema:
+    {
+        "role": "tool",
+        "tool_call_id": tool_call.id,
+        "tool_name": name, # Name of the function called, e.g. "transfer_to_triage"
+        "content": result.value, # This will be the agent's name, e.g. "Triage Agent"
+    }
+    5. When all of the tools have been invoked from the LLM's response (Step 2), we then add the Response.messages to the conversation history. This includes the 
+    result of each tool call which provides context to the LLM going forward. If Response.agent is populated and different the current active_agent, we change the active_agent to said agent.
+    6. Go through this loop again and again until all agent transfers and tool calls have been made (Steps 1-5).
+    7. At this point we'll call the LLM one more time with the new conversation history. At this point no tools will be invoked and
+    we'll just receive a normal response from the LLM, which we will go back to the user with. During this call, the LLM will
+    have context an all agent transfers and tool calls that have happened, which their resulting values. This gives it all the context
+    it needs to produce a response for the user.
+    
+    TODO: Each agent receives the full conversation history thus far as it is constantly amended to by each agent. The only thing that changes is the system message
+    that the agent receives. This means that agents are potentially receiving unnecessary information from the conversation history in order to complete their task.
+    I need to devise a way in which when we transfer to another agent, it only receives the context it needs from the conversation history, and not the entire thing.
+    This way, we can keep the agent on task and minimize hallucinations.
+    """
     def run(
         self,
         agent: Agent,  # The agent to interact with
@@ -263,97 +290,21 @@ class Swarm:
             if not message.tool_calls or not execute_tools:  # Check if there are no tool calls in the ChatCompletionMessage, or if tools should not be executed
                 debug_print(debug, "Ending turn.")  # Debug print ending turn
                 break  # Exit the while loop
-            tool_results: Response = handle_tool_calls(  # Call chosen tools and retrieve result
+            tools_response: Response = handle_tool_calls(  # Call chosen tools and retrieve result
                 tool_calls = message.tool_calls, functions = active_agent.functions, context_variables = context_variables, debug = debug
             )
-            history.extend(tool_results.messages)  # Extend history with tool results
-            context_variables.update(tool_results.context_variables)  # Update context variables
-            if tool_results.agent and tool_results.agent != active_agent:  # If there's a new agent, and it's different to the current...
-                active_agent = tool_results.agent  # ...switch to the new agent
+            history.extend(tools_response.messages)  # Extend history with tool results
+            context_variables.update(tools_response.context_variables)  # Update context variables
+            if tools_response.agent and tools_response.agent != active_agent:  # If there's a new agent, and it's different to the current...
+                active_agent = tools_response.agent  # ...switch to the new agent
+
+        # Keep going until we don't call any more tools, and we break on line 286 above. We'll always have an active_agent.
+        # That condition is just there so we continue the loop
         return Response(
-            messages=history,  # Messages from the initial length of history to the end of the array (i.e, all new messages generated in this interaction)
+            messages=history[init_len:],  # Messages from the initial length of history to the end of the array (i.e, all new messages generated in this interaction)
             agent=active_agent,  # The active agent
             context_variables=context_variables,  # Updated context variables
             tokens_used=tokens_used  # Total tokens used
-        )
-
-    def run_test(
-        self,
-        agent: Agent,  # The triage agent
-        messages: List,  # The list of messages (conversation history)
-        context_variables=None,  # Contextual variables for the conversation
-        model_override: str = None,  # Optional model override
-        debug: bool = False,  # Whether to enable debug mode
-        max_sequential_turns: int = float("inf"),
-        # The amount of sequential turns the assistant can have before returning back to the user, default to positive infinity
-        execute_tools: bool = True,  # Whether to execute tool calls
-    ) -> Response:
-        logging.basicConfig(level=logging.ERROR)
-        if context_variables is None:
-            context_variables = {}
-        context_variables = copy.deepcopy(context_variables)
-        history = copy.deepcopy(messages)
-        tokens_used = 0
-
-        # Main loop for the triage agent
-        while len(history) < max_sequential_turns:
-            completion: ChatCompletion = self.get_chat_completion(
-                agent=agent,
-                history=history,
-                context_variables=context_variables,
-                model_override=model_override,
-                debug=debug,
-            )
-            message: ChatCompletionMessage = completion.choices[0].message
-            debug_print(debug, "Received completion:", str(message))
-            message.sender = agent.name
-            history.append(json.loads(message.model_dump_json()))
-            tokens_used += completion.usage.total_tokens
-
-            if not message.tool_calls or not execute_tools:
-                debug_print(debug, "Ending turn.")
-                break
-
-            # Handle tool calls and agent handovers
-            tool_results: Response = handle_tool_calls(
-                tool_calls=message.tool_calls,
-                functions=agent.functions,
-                context_variables=context_variables,
-                debug=debug,
-            )
-
-            # If a new agent needs to be invoked, handle it in a separate chat completion
-            if tool_results.agent and tool_results.agent != agent:
-                # Isolate context for the new agent
-                agent_context = {"task": tool_results.messages}
-                agent_response = self.run_test(
-                    agent=tool_results.agent,
-                    # TODO: Each Agent receives the latest message from the user. They don't need to know anything else they've said in the past, or the outputs of other agents and their tools
-                    messages=[],
-                    context_variables=agent_context,
-                    model_override=model_override,
-                    debug=debug,
-                    max_sequential_turns=max_sequential_turns,
-                    execute_tools=execute_tools,
-                )
-                # Compile results back to the triage agent
-                tool_results.messages.extend(agent_response.messages)
-                context_variables.update(agent_response.context_variables)
-            history.extend(tool_results.messages)
-            context_variables.update(tool_results.context_variables)
-
-            '''
-            TODO: Need to modify this so sub-agent completions and tool calls aren't added to the Triage Agent's history.
-            The Triage Agent doesn't need to know about the inner workings of the Agents that it invokes, just the final result it produces...
-            Essentially we need to maintain a new history for each agent we invoke until we're finished (no more Agent transfers or tool calls) and need to go back to the Triage agent, when the histories can be wiped.
-            This is very close though...
-            '''
-
-        return Response(
-            messages=history,
-            agent=agent,
-            context_variables=context_variables,
-            tokens_used=tokens_used
         )
 
 def pretty_print_messages(messages) -> None:
@@ -376,7 +327,7 @@ def run_demo_loop(
     starting_agent: Agent, context_variables = None, debug = False
 ) -> None:
     client = Swarm() # Initialize a Swarm instance
-    print("Starting Swarm CLI 🐝")
+    print("Starting Scurri AI Concierge...")
     messages = [] # Initialize the conversation history
     agent = starting_agent  # Set the starting agent
     total_tokens_used = 0  # Initialize a variable to track total tokens
@@ -387,5 +338,5 @@ def run_demo_loop(
         pretty_print_messages(response.messages)
         total_tokens_used += response.tokens_used # Update the total tokens used
         debug_print(debug, f"Total tokens used in this session: {total_tokens_used}") # Print the total tokens used so far in the session
-        messages.extend(response.messages) # Extend the conversation history with the agent's response
+        messages.extend(response.messages) # Extend the conversation history with the agent's responses
         agent = response.agent # Update the current agent if a transfer occurred
