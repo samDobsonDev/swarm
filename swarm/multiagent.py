@@ -103,7 +103,7 @@ class Response(BaseModel):
 
     Attributes:
         messages (List): A list of messages in the response.
-        agent (Optional[Agent]): The agent that generated the response.
+        agent (Optional[Agent]): The Agent we need to transfer to.
         context_variables (dict): Context variables associated with the response.
         tokens_used (int): The number of tokens used in generating the response.
     """
@@ -118,7 +118,7 @@ class Result(BaseModel):
 
     Attributes:
         value (str): The result value as a string.
-        agent (Optional[Agent]): The agent instance, if applicable.
+        agent (Optional[Agent]): The Agent instance returned by a transfer tool, if applicable.
         context_variables (dict): A dictionary of context variables.
     """
     value: str = ""
@@ -167,12 +167,18 @@ def handle_tool_calls(
             )
             continue  # Skip to the next tool call
         args = json.loads(tool_call.function.arguments)  # Parse the function arguments model tools_response JSON
-        debug_print(debug, f"Processing tool call: {name} with arguments {args}")  # Log the tool call processing
         func = function_map[name]  # Retrieve the function object from the map
+        num_args = 0 # Initialize the number of arguments the function accepts to 0
         if callable(func) and hasattr(func, '__code__'):  # Ensure func is callable and has a __code__ attribute
+            num_args = func.__code__.co_argcount # Extract the number of arguments the function accepts
             if __CTX_VARS_NAME__ in func.__code__.co_varnames:  # Check if the function accepts context variables
                 args[__CTX_VARS_NAME__] = context_variables  # Add context variables to the arguments
-        raw_result = function_map[name]()  # Call the function with arguments. TODO: Make it so functions can accepts arguments like normal
+        if not args and num_args == 0: # Use the num_args variable to decide how to call the function
+            debug_print(debug, f"Calling tool: {name} with no arguments")
+            raw_result = func()  # Call the function without arguments
+        else:
+            debug_print(debug, f"Calling tool: {name} with arguments {args}")
+            raw_result = func(args)  # Call the function with arguments
         result: Result = handle_function_result(raw_result, debug)  # Process the function result
         tools_response.messages.append(  # Add the function result to the tools_response messages
             {
@@ -230,9 +236,9 @@ class Swarm:
     This is the current implementation of agent transfer/handover:
     
     1. Call LLM
-    2. LLM responds specifying it wants to use a tool or multiple tools
+    2. LLM responds specifying it wants to use a tool or multiple tools, as well as the parameters to pass to said tool/s
     3. We invoke the LLM's chosen tools and produce a Response object. When initializing this object we set the Agent field to None.
-    For each tool we call, we use the result of the tool call to produce a Result object. Each Result contains a value and a potential Agent. 
+    For each tool we call, we use the result of the tool call to produce a Result object. Each Result contains a value and a potential Agent, if the tool returned one.
     The Response object has a messages field. We use the Result objects to help construct fake "LLM" response messages which we add to the conversation history.
     Each message adheres to the following schema:
     {
@@ -247,21 +253,27 @@ class Swarm:
     7. At this point we'll call the LLM one more time with the new conversation history. At this point no tools will be invoked and
     we'll just receive a normal response from the LLM, which we will go back to the user with. During this call, the LLM will
     have context an all agent transfers and tool calls that have happened, which their resulting values. This gives it all the context
-    it needs to produce a response for the user.
+    it needs to produce a response for the user. 
     
-    TODO: Each agent receives the full conversation history thus far as it is constantly amended to by each agent. The only thing that changes is the system message
-    that the agent receives. This means that agents are potentially receiving unnecessary information from the conversation history in order to complete their task.
-    I need to devise a way in which when we transfer to another agent, it only receives the context it needs from the conversation history, and not the entire thing.
-    This way, we can keep the agent on task and minimize hallucinations. 
+    NOTE: In this design, the user communicates with whatever the active agent is at the time. There isn't a 
+    centralized agent that the user communicates with exclusively and that hands over to other agents with the intentioned that they will
+    relay any information they uncover back to this centralized agent. This approach solves the problem of an agentic system where there is only
+    one agent, which is that above around 5-10 tool options, the agent can begin to make mistakes on which tool to pick and when. With this 
+    multi-agent approach, each agent has a specific domain they work in with a set selection of tools.
     
-    One way to approach this might be having the agents share some overall state, rather than simply amending the conversation history with more and more
-    messages (that includes tools calls, results of tool calls, agent transfer and normal conversation history) like we're doing now, which looks bloated.
-    This state can include any agent transfers, tool calls and their results by agents, as well as the conversation history. This state
-    would also be in chronological order to provide context to the LLM as to when tool calls, agent transfers or normal conversation occurred.
-    This means we essentially provide a timeline to the LLM. In this approach, the user wouldn't be communicating exclusively with the top-level/centralized agent in the conversation, such as a Triage Agent, but rather
-    would be communicating with whatever the active agent is at the time. 
+    TODO: Currently, each agent receives the full conversation history thus far as it is constantly amended to by each agent. The only thing that changes is the system message
+    that each agent receives. This means that agents are potentially receiving unnecessary information from the conversation history in order to complete their task.
+    I need to devise a way in which when we transfer to another agent, it only receives the context it needs and not the conversation history.
+    This way, we can keep each agent on task and minimize hallucinations. 
     
-    However, there is a downside to this approach. Take staff in a store as an example. Let's say a customer walks in a says to the store manager "Hi there, I need to return this device, it doesn't work. Can I get a replacement?".
+    One way to approach this might be having the agents share some overall state, which is similar to what we do now with amending the conversation history with more and more
+    messages (that includes tools calls, results of tool calls, agent transfer and normal conversation history).
+    The difference is this state will be more concentrated and include less bloat, and can include any agent transfers, tool calls and their results by agents, as well as the conversation history. 
+    This state would also be in chronological order to provide context to the LLM as to when tool calls, agent transfers or normal conversation occurred.
+    This means we essentially provide a timeline to the LLM. In this approach, similarly to the current approach, the user wouldn't be communicating exclusively with the top-level/centralized agent 
+    in the conversation, but rather would be communicating with whatever the active agent is at the time. 
+    
+    However, there is a downside to this solution. Take staff in a store as an example. Let's say a customer walks in a says to the store manager "Hi there, I need to return this device, it doesn't work. Can I get a replacement?".
     The store manager analyses the situation and the device, where they concur that the item is indeed damaged, the battery is broken. The store manager decides to hand this over to a supervisor, to see if the purchase is eligible for
     a replacement, or if the only option is a refund. The supervisor doesn't need to know the details of the item and how it's damaged, just that the store manager has asked them to check if the purchase is eligible
     for a replacement or refund, indicating that the store manager has previously checked the item and approved the return. The supervisor performs their checks and determines that the customer can receive a replacement device.
@@ -271,7 +283,7 @@ class Swarm:
     customer initially bought was damaged, which is just unnecessary information and doesn't impact the task of the stock clerk in anyway, other than just overloading it with irrelevant information. 
     It isn't in the best interest of a sub-agent to know the entire context of the session, just the relevant details to ensure the agent stays on task and is as efficient as possible.
     
-    So taking this into account, what is a suitable approach? What agent/s should the user communicate with? How should we construct the context that each sub-agent receives as it is transferred to? 
+    So taking this into account, what is a suitable approach? What agent/s should the user communicate with (centralized vs active agent)? How should we construct the context that each sub-agent receives as it is transferred to? 
     """
     def run(
         self,
@@ -314,10 +326,10 @@ class Swarm:
             )
             history.extend(tools_response.messages)  # Extend history with tool results
             context_variables.update(tools_response.context_variables)  # Update context variables
-            if tools_response.agent and tools_response.agent != active_agent:  # If there's a new agent, and it's different to the current...
+            if tools_response.agent:  # If Response contains an Agent, indicating we've transferred to a new one...
                 active_agent = tools_response.agent  # ...switch to the new agent
 
-        # Keep going until we don't call any more tools, and we break on line 286 above. We'll always have an active_agent.
+        # Keep going until we don't call any more tools, and we break on line 316 above. We'll always have an active_agent.
         # That condition is just there so we continue the loop
         return Response(
             messages=history[init_len:],  # Messages from the initial length of history to the end of the array (i.e, all new messages generated in this interaction)
