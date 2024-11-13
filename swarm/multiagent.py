@@ -104,12 +104,10 @@ class Response(BaseModel):
     Attributes:
         messages (List): A list of messages in the response.
         agent (Optional[Agent]): The Agent we need to transfer to.
-        context_variables (dict): Context variables associated with the response.
         tokens_used (int): The number of tokens used in generating the response.
     """
     messages: List = []
     agent: Optional[Agent] = None
-    context_variables: dict = {}
     tokens_used: int = 0
 
 class Result(BaseModel):
@@ -119,11 +117,9 @@ class Result(BaseModel):
     Attributes:
         value (str): The result value as a string.
         agent (Optional[Agent]): The Agent instance returned by a transfer tool, if applicable.
-        context_variables (dict): A dictionary of context variables.
     """
     value: str = ""
     agent: Optional[Agent] = None
-    context_variables: dict = {}
 
 __CTX_VARS_NAME__ = "context_variables"
 
@@ -148,11 +144,10 @@ def handle_function_result(raw_result, debug) -> Result:  # Define a function to
 def handle_tool_calls(
     tool_calls: List[ChatCompletionMessageToolCall],  # List of tool calls to process. This is provided by the model
     functions: List[AgentFunction],  # List of functions to active agent has as its disposal
-    context_variables: dict,  # Context variables to pass to functions
     debug: bool,  # Debug flag for logging
 ) -> Response:  # Returns a Response object
     function_map = {f.__name__: f for f in functions}  # Map function names to function objects
-    tools_response = Response(messages=[], agent=None, context_variables={})  # Initialize an empty Response object
+    tools_response = Response(messages=[], agent=None)  # Initialize an empty Response object
     for tool_call in tool_calls:  # Iterate over each tool call
         name = tool_call.function.name  # Get the function name from the tool call
         if name not in function_map:  # Check if the function is not in the map
@@ -171,8 +166,6 @@ def handle_tool_calls(
         num_args = 0 # Initialize the number of arguments the function accepts to 0
         if callable(func) and hasattr(func, '__code__'):  # Ensure func is callable and has a __code__ attribute
             num_args = func.__code__.co_argcount # Extract the number of arguments the function accepts
-            if __CTX_VARS_NAME__ in func.__code__.co_varnames:  # Check if the function accepts context variables
-                args[__CTX_VARS_NAME__] = context_variables  # Add context variables to the arguments
         if not args and num_args == 0: # Use the num_args variable to decide how to call the function
             debug_print(debug, f"Calling tool: {name} with no arguments")
             raw_result = func()  # Call the function without arguments
@@ -188,28 +181,39 @@ def handle_tool_calls(
                 "content": result.value,
             }
         )
-        tools_response.context_variables.update(result.context_variables)  # Update context variables in the tools_response
         if result.agent:  # Check if the result includes an agent
             tools_response.agent = result.agent  # Set the agent in the tools_response
     return tools_response  # Return the constructed tools_response
+
+class ContextManager:
+    def __init__(self):
+        self.shared_state = {"centralized": {}, "agent_specific": defaultdict(dict)}
+
+    def update_shared_state(self, agent_name, context):
+        self.shared_state["agent_specific"][agent_name].update(context)
+
+    def get_context_for_agent(self, agent_name):
+        return {
+            "centralized": self.shared_state["centralized"],
+            "agent_specific": self.shared_state["agent_specific"].get(agent_name, {})
+        }
 
 class Swarm:
     def __init__(self, client = None):
         if not client:
             client = OpenAI()
         self.client = client
+        self.context_manager = ContextManager()  # Initialize context manager
 
     def get_chat_completion(
         self,
         agent: Agent,  # The agent to interact with
         history: List,  # The list of messages (conversation history)
-        context_variables: dict,  # Contextual variables for the conversation
         model_override: str,  # Optional model override
         debug: bool,  # Whether to enable debug mode
     ) -> ChatCompletion:
-        context_variables = defaultdict(str,context_variables)  # Initialize context variables with default string values
         instructions = (  # Determine the instructions/system message for the agent
-            agent.instructions(context_variables)  # Call the instructions function if it's callable
+            agent.instructions()  # Call the instructions function if it's callable
             if callable(agent.instructions)
             else agent.instructions  # Use the instructions string directly if not callable
         )
@@ -229,7 +233,7 @@ class Swarm:
         if tools:  # If tools are available...
             create_params["parallel_tool_calls"] = agent.parallel_tool_calls  # ...allow parallel tool calls
         # Debug print the full create_params object
-        debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=4))  # Log the parameters if debugging
+        debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=3))  # Log the parameters if debugging
         return self.client.chat.completions.create( **create_params)  # Make the chat completion request with the prepared parameters
 
     """
@@ -287,29 +291,24 @@ class Swarm:
     """
     def run(
         self,
-        agent: Agent,  # The agent to interact with
+        user_interface_agent: Agent,  # The agent to interact with
         messages: List,  # The list of messages (conversation history)
-        context_variables = None,  # Contextual variables for the conversation
         model_override: str = None,  # Optional model override
         debug: bool = False,  # Whether to enable debug mode
         max_sequential_turns: int = float("inf"),  # The amount of sequential turns the assistant can have before returning back to the user, default to positive infinity
         execute_tools: bool = True,  # Whether to execute tool calls
     ) -> Response:
         logging.basicConfig(level=logging.ERROR)
-        # Initialize context_variables as an empty dictionary if not provided
-        if context_variables is None:
-            context_variables = {}
-        active_agent = agent  # Set the active agent
-        context_variables = copy.deepcopy(context_variables)  # Deep copy context variables
+        active_agent = user_interface_agent  # Set the active agent
         history = copy.deepcopy(messages)  # Deep copy the message history
         init_len = len(messages)  # Initial length of the message history
         tokens_used = 0  # Initialize token usage counter
         # While the length of the conversation history - the initial length of the conversation history is less than max_sequential_turns, and we have an active agent...
         while len(history) - init_len < max_sequential_turns and active_agent:
+            agent_context = self.context_manager.get_context_for_agent(active_agent.name)
             completion: ChatCompletion = self.get_chat_completion(  # Get ChatCompletion with current history and active agent
                 agent=active_agent,
                 history=history,
-                context_variables=context_variables,
                 model_override=model_override,
                 debug=debug,
             )
@@ -322,10 +321,9 @@ class Swarm:
                 debug_print(debug, "Ending turn.")  # Debug print ending turn
                 break  # Exit the while loop
             tools_response: Response = handle_tool_calls(  # Call chosen tools and retrieve result
-                tool_calls = message.tool_calls, functions = active_agent.functions, context_variables = context_variables, debug = debug
+                tool_calls = message.tool_calls, functions = active_agent.functions, debug = debug
             )
             history.extend(tools_response.messages)  # Extend history with tool results
-            context_variables.update(tools_response.context_variables)  # Update context variables
             if tools_response.agent:  # If Response contains an Agent, indicating we've transferred to a new one...
                 active_agent = tools_response.agent  # ...switch to the new agent
 
@@ -334,7 +332,6 @@ class Swarm:
         return Response(
             messages=history[init_len:],  # Messages from the initial length of history to the end of the array (i.e, all new messages generated in this interaction)
             agent=active_agent,  # The active agent
-            context_variables=context_variables,  # Updated context variables
             tokens_used=tokens_used  # Total tokens used
         )
 
@@ -355,19 +352,22 @@ def pretty_print_messages(messages) -> None:
             print(f"\033[95m{name}\033[0m({arg_str[1:-1]})") # Print the tool call in purple
 
 def run_demo_loop(
-    starting_agent: Agent, context_variables = None, debug = False
+    starting_agent: Agent, debug = False
 ) -> None:
-    client = Swarm() # Initialize a Swarm instance
+    client = Swarm()  # Initialize a Swarm instance
     print("Starting Scurri AI Concierge...")
-    messages = [] # Initialize the conversation history
+    events = []  # Initialize the timeline of events
     agent = starting_agent  # Set the starting agent
     total_tokens_used = 0  # Initialize a variable to track total tokens
     while True:
-        user_input = input("\033[90mUser\033[0m: ") # Prompt the user for input...
-        messages.append({"role": "user", "content": user_input}) # ...and append it to the conversation history
-        response = client.run(agent = agent, messages = messages, context_variables = context_variables, debug = debug)  # Run the client with the current agent, conversation history and context variables
+        user_input = input("\033[90mUser\033[0m: ")  # Prompt the user for input...
+        events.append({
+            "event": "user_message",
+            "content": user_input
+        })
+        response = client.run(user_interface_agent = agent, messages = events, debug = debug)  # Run the client with the current agent and events
         pretty_print_messages(response.messages)
-        total_tokens_used += response.tokens_used # Update the total tokens used
-        debug_print(debug, f"Total tokens used in this session: {total_tokens_used}") # Print the total tokens used so far in the session
-        messages.extend(response.messages) # Extend the conversation history with the agent's responses
-        agent = response.agent # Update the current agent if a transfer occurred
+        total_tokens_used += response.tokens_used  # Update the total tokens used
+        debug_print(debug, f"Total tokens used in this session: {total_tokens_used}")  # Print the total tokens used so far in the session
+        events.extend(response.messages)  # Extend the timeline with the agent's responses
+        agent = response.agent  # Update the current agent if a transfer occurred

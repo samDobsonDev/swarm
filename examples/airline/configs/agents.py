@@ -8,7 +8,6 @@ from swarm import Agent
 def transfer_to_flight_modification():
     return flight_modification
 
-
 def transfer_to_flight_cancellation():
     return flight_cancellation
 
@@ -27,8 +26,22 @@ def transfer_to_triage():
     """
     return triage_agent
 
+context_variables = {
+    "customer_context": """Here is what you know about the customer's details:
+1. CUSTOMER_ID: customer_12345
+2. NAME: John Doe
+3. PHONE_NUMBER: (123) 456-7890
+4. EMAIL: johndoe@example.com
+5. STATUS: Premium
+6. ACCOUNT_STATUS: Active
+7. BALANCE: $0.00
+8. LOCATION: 1234 Main St, San Francisco, CA 94123, USA
+""",
+    "flight_context": """The customer has an upcoming flight from LGA (Laguardia) in NYC to LAX in Los Angeles.
+The flight # is 1919. The flight departure date is 3pm ET, 5/21/2024.""",
+}
 
-def triage_instructions(context_variables):
+def triage_instructions():
     customer_context = context_variables.get("customer_context", None)
     flight_context = context_variables.get("flight_context", None)
     return f"""You are to triage a users request, and call a tool to transfer to the right intent.

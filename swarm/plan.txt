@@ -1,0 +1,11 @@
+1. User types a message
+2. We call LLM using BAML functions. Depending on which Agent is the active agent, it will have its own BAML function. The prompt that is
+part of said function will include instructions specific to that agent including any policies.
+3. Using the BAML function, we force the LLM to return a structured output for tool calls, agent transfer tool calls and just normal output.
+3a. When LLM decides to call an agent transfer tool, BAML will produce structured output including a field providing relevant context to the next agent
+3b. When LLM decides to call a normal tool, we use BAML to provide structured output including the arguments to pass to said tool
+3c. When LLM decides to just produce standard output, we don't necessary need to use BAML, as there is no structure we rely on,
+but we need to use BAML so it has the option to do this, or to call a tool, which we DO need structured output for
+4. We switch to the new agent using its agent transfer tool, passing it the relevant context produced by the previous agent
+5. Repeat steps 2-4 until we receive normal output (no tool calls or agent transfer tool calls)
+6. Go back to the user with the normal output. This might include an answer, prompting for approval to execute a tool, or ask the user to provide more information
