@@ -127,7 +127,7 @@ def handle_function_result(raw_result, debug) -> Result:
             return result
         case Agent() as agent:
             return Result(
-                value=json.dumps({"assistant": agent.name}),
+                value=json.dumps({"agent": agent.name}),
                 agent=agent,
             )
         case _:
@@ -135,7 +135,7 @@ def handle_function_result(raw_result, debug) -> Result:
                 return Result(value=str(raw_result))
             except Exception as e:
                 error_message = f"Failed to cast response to string: {raw_result}. Make sure agent functions return a string or Result object. Error: {str(e)}"
-                debug_print(debug, error_message)
+                # debug_print(debug, error_message)
                 raise TypeError(error_message)
 
 
@@ -149,7 +149,7 @@ def handle_tool_calls(
     for tool_call in tool_calls:
         name = tool_call.function.name
         if name not in function_map:
-            debug_print(debug, f"Tool {name} not found in function map.")
+            # debug_print(debug, f"Tool {name} not found in function map.")
             tools_response.events.append(
                 {
                     "originator": agent.name,
@@ -166,10 +166,10 @@ def handle_tool_calls(
         if callable(func) and hasattr(func, '__code__'):
             num_args = func.__code__.co_argcount
         if not args and num_args == 0:
-            debug_print(debug, f"Calling tool: {name} with no arguments")
+            # debug_print(debug, f"Calling tool: {name} with no arguments")
             raw_result = func()
         else:
-            debug_print(debug, f"Calling tool: {name} with arguments {args}")
+            # debug_print(debug, f"Calling tool: {name} with arguments {args}")
             raw_result = func(args)
         result: Result = handle_function_result(raw_result, debug)
         tools_response.events.append(
@@ -253,7 +253,7 @@ class Swarm:
         }
         if tools:
             create_params["parallel_tool_calls"] = agent.parallel_tool_calls
-        debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=3))
+        # debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=3))
         return self.client.chat.completions.create( **create_params)
 
     """
@@ -332,7 +332,7 @@ class Swarm:
                 debug=debug,
             )
             message: ChatCompletionMessage = completion.choices[0].message
-            debug_print(debug, "Received completion:", str(message))
+            # debug_print(debug, "Received completion:", str(message))
             if message.tool_calls:
                 for tool_call in message.tool_calls:
                     events_history.append({
@@ -350,7 +350,6 @@ class Swarm:
                 })
             tokens_used += completion.usage.total_tokens
             if not message.tool_calls or not execute_tools:
-                debug_print(debug, "Ending turn.")
                 break
             tools_response: Response = handle_tool_calls(
                 tool_calls = message.tool_calls, agent = active_agent, debug = debug
@@ -400,6 +399,7 @@ def run_demo_loop(
         })
         response = client.run(agent= agent, events = events, debug = debug)
         pretty_print_messages(response.events)
+        debug_print(debug, "Ending turn.")
         total_tokens_used += response.tokens_used
         debug_print(debug, f"Total tokens used in this session: {total_tokens_used}")
         events.extend(response.events)
