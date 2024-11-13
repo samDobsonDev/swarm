@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from datetime import datetime
 
 # OpenAI Package/library imports
-from openai import OpenAI, Stream
+from openai import OpenAI
 from openai.types.chat import ChatCompletionMessage, ChatCompletion
 from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
 
@@ -102,11 +102,13 @@ class Response(BaseModel):
     Attributes:
         events (List): A list of events that occurred during this interaction.
         agent (Optional[Agent]): The Agent we need to transfer to.
-        tokens_used (int): The number of tokens used in generating the response.
+        input_tokens_used (int): The number of input tokens used in generating the response.
+        output_tokens_used (int): The number of output tokens used in generating the response.
     """
     events: List = []
     agent: Optional[Agent] = None
-    tokens_used: int = 0
+    input_tokens_used: int = 0
+    output_tokens_used: int = 0
 
 class Result(BaseModel):
     """
@@ -232,12 +234,20 @@ class Swarm:
             if callable(agent.instructions)
             else agent.instructions
         )
-        user_message_content = "\n".join(
-            format_event(event) for event in events
+        previous_events_content = "\n".join(
+            format_event(event) for event in events[:-1]
         )
+        latest_event_content = f"This is the latest event:\n{format_event(events[-1])}"
+        full_agent_instructions = agent_instructions
+        if previous_events_content:
+            full_agent_instructions += (
+                    "\nEvents so far in the conversation (this includes user messages, "
+                    "assistant messages, agent tool calls and agent transfers):\n" +
+                    previous_events_content
+            )
+        full_agent_instructions += "\n\n" + latest_event_content
         messages = [
-            {"role": "system", "content": agent_instructions},
-            {"role": "user", "content": user_message_content}
+            {"role": "system", "content": full_agent_instructions}
         ]
         tools = [function_to_json(func = f) for f in agent.functions]
         for tool in tools:
@@ -253,7 +263,7 @@ class Swarm:
         }
         if tools:
             create_params["parallel_tool_calls"] = agent.parallel_tool_calls
-        # debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=3))
+        debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=3))
         return self.client.chat.completions.create( **create_params)
 
     """
@@ -322,7 +332,8 @@ class Swarm:
         active_agent = agent
         events_history = copy.deepcopy(events)
         init_len = len(events)
-        tokens_used = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
         while len(events_history) - init_len < max_sequential_turns and active_agent:
             # agent_context = self.context_manager.get_context_for_agent(active_agent.name)
             completion: ChatCompletion = self.get_chat_completion(
@@ -348,7 +359,8 @@ class Swarm:
                     "event": "assistant_message",
                     "content": message.content,
                 })
-            tokens_used += completion.usage.total_tokens
+            total_input_tokens += completion.usage.prompt_tokens
+            total_output_tokens += completion.usage.completion_tokens
             if not message.tool_calls or not execute_tools:
                 break
             tools_response: Response = handle_tool_calls(
@@ -358,12 +370,13 @@ class Swarm:
             if tools_response.agent:
                 active_agent = tools_response.agent
         return Response(
-            events=events_history[init_len:],
-            agent=active_agent,
-            tokens_used=tokens_used
+            events = events_history[init_len:],
+            agent = active_agent,
+            input_tokens_used = total_input_tokens,
+            output_tokens_used = total_output_tokens
         )
 
-def pretty_print_messages(events) -> None:
+def pretty_print_events(events):
     for event in events:
         originator = event["originator"]
         event_type = event["event"]
@@ -389,7 +402,8 @@ def run_demo_loop(
     print("Starting Scurri AI Concierge...")
     events = []
     agent = agent
-    total_tokens_used = 0
+    total_input_tokens_used = 0
+    total_output_tokens_used = 0
     while True:
         user_input = input("\033[90mUser\033[0m: ")
         events.append({
@@ -398,9 +412,13 @@ def run_demo_loop(
             "content": user_input
         })
         response = client.run(agent= agent, events = events, debug = debug)
-        pretty_print_messages(response.events)
+        pretty_print_events(response.events)
         debug_print(debug, "Ending turn.")
-        total_tokens_used += response.tokens_used
-        debug_print(debug, f"Total tokens used in this session: {total_tokens_used}")
+        total_input_tokens_used += response.input_tokens_used
+        total_output_tokens_used += response.output_tokens_used
+        debug_print(
+            debug,
+            f"Total input tokens used in this session: {total_input_tokens_used}. Total output tokens used in this session: {total_output_tokens_used}. Total tokens used in this session: {total_input_tokens_used + total_output_tokens_used}"
+        )
         events.extend(response.events)
         agent = response.agent
