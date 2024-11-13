@@ -30,27 +30,28 @@ from swarm import Swarm, Agent
 
 client = Swarm()
 
+
 def transfer_to_agent_b():
-    return agent_b
+  return agent_b
 
 
 agent_a = Agent(
-    name="Agent A",
-    instructions="You are a helpful agent.",
-    functions=[transfer_to_agent_b],
+  name="Agent A",
+  instructions="You are a helpful agent.",
+  functions=[transfer_to_agent_b],
 )
 
 agent_b = Agent(
-    name="Agent B",
-    instructions="Only speak in Haikus.",
+  name="Agent B",
+  instructions="Only speak in Haikus.",
 )
 
 response = client.run(
-    agent=agent_a,
-    messages=[{"role": "user", "content": "I want to talk to agent B."}],
+  agent=agent_a,
+  events=[{"role": "user", "content": "I want to talk to agent B."}],
 )
 
-print(response.messages[-1]["content"])
+print(response.events[-1]["content"])
 ```
 
 ```
@@ -178,18 +179,19 @@ The `instructions` can either be a regular `str`, or a function that returns a `
 
 ```python
 def instructions(context_variables):
-   user_name = context_variables["user_name"]
-   return f"Help the user, {user_name}, do whatever they want."
+  user_name = context_variables["user_name"]
+  return f"Help the user, {user_name}, do whatever they want."
+
 
 agent = Agent(
-   instructions=instructions
+  instructions=instructions
 )
 response = client.run(
-   agent=agent,
-   messages=[{"role":"user", "content": "Hi!"}],
-   context_variables={"user_name":"John"}
+  agent=agent,
+  events=[{"role": "user", "content": "Hi!"}],
+  context_variables={"user_name": "John"}
 )
-print(response.messages[-1]["content"])
+print(response.events[-1]["content"])
 ```
 
 ```
@@ -205,19 +207,20 @@ Hi John, how can I assist you today?
 
 ```python
 def greet(context_variables, language):
-   user_name = context_variables["user_name"]
-   greeting = "Hola" if language.lower() == "spanish" else "Hello"
-   print(f"{greeting}, {user_name}!")
-   return "Done"
+    user_name = context_variables["user_name"]
+    greeting = "Hola" if language.lower() == "spanish" else "Hello"
+    print(f"{greeting}, {user_name}!")
+    return "Done"
+
 
 agent = Agent(
-   functions=[greet]
+    functions=[greet]
 )
 
 client.run(
-   agent=agent,
-   messages=[{"role": "user", "content": "Usa greet() por favor."}],
-   context_variables={"user_name": "John"}
+    agent=agent,
+    events=[{"role": "user", "content": "Usa greet() por favor."}],
+    context_variables={"user_name": "John"}
 )
 ```
 
@@ -253,20 +256,22 @@ It can also update the `context_variables` by returning a more complete `Result`
 ```python
 sales_agent = Agent(name="Sales Agent")
 
+
 def talk_to_sales():
-   print("Hello, World!")
-   return Result(
-       value="Done",
-       agent=sales_agent,
-       context_variables={"department": "sales"}
-   )
+    print("Hello, World!")
+    return Result(
+        value="Done",
+        agent=sales_agent,
+        context_variables={"department": "sales"}
+    )
+
 
 agent = Agent(functions=[talk_to_sales])
 
 response = client.run(
-   agent=agent,
-   messages=[{"role": "user", "content": "Transfer me to sales"}],
-   context_variables={"user_name": "John"}
+    agent=agent,
+    events=[{"role": "user", "content": "Transfer me to sales"}],
+    context_variables={"user_name": "John"}
 )
 print(response.agent.name)
 print(response.context_variables)

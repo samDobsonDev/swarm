@@ -3,6 +3,7 @@ import copy
 import json
 import logging
 import inspect
+
 from collections import defaultdict
 from typing import List, Callable, Union, Optional
 from pydantic import BaseModel
@@ -14,12 +15,11 @@ from openai.types.chat import ChatCompletionMessage, ChatCompletion
 from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
 
 def debug_print(debug: bool, *args: str) -> None:
-    if not debug: return  # If debugging is not enabled, exit the function
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Get the current time formatted as a timestamp
-    message = " ".join(map(str, args))  # Convert all arguments to strings and join them into a single message
-    print(f"\033[97m[\033[90m{timestamp}\033[97m]\033[90m {message}\033[0m")  # Print the timestamp and message with color formatting
+    if not debug: return
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    message = " ".join(map(str, args))
+    print(f"\033[97m[\033[90m{timestamp}\033[97m]\033[90m {message}\033[0m")
 
-# Define a type alias for a function that can take any number of arguments and return either a string, an Agent instance, or a dictionary
 AgentFunction = Callable[..., Union[str, "Agent", dict]]
 
 def function_to_json(func: AgentFunction) -> dict:
@@ -34,7 +34,7 @@ def function_to_json(func: AgentFunction) -> dict:
     Returns:
         A dictionary representing the function's signature in JSON format.
     """
-    type_map = {  # Map Python types to JSON schema types
+    type_map = {
         str: "string",
         int: "integer",
         float: "number",
@@ -44,34 +44,34 @@ def function_to_json(func: AgentFunction) -> dict:
         type(None): "null",
     }
     try:
-        signature = inspect.signature(func)  # Get the function's signature
+        signature = inspect.signature(func)
     except ValueError as e:
-        raise ValueError(  # Raise an error if the signature cannot be obtained
+        raise ValueError(
             f"Failed to get signature for function {func.__name__}: {str(e)}"
         )
-    parameters = {}  # Initialize a dictionary to hold parameter details
+    parameters = {}
     for param in signature.parameters.values():
         try:
-            param_type = type_map.get(param.annotation, "string")  # Get the parameter type
+            param_type = type_map.get(param.annotation, "string")
         except KeyError as e:
-            raise KeyError(  # Raise an error if the type annotation is unknown
+            raise KeyError(
                 f"Unknown type annotation {param.annotation} for parameter {param.name}: {str(e)}"
             )
-        parameters[param.name] = {"type": param_type}  # Add parameter type to the dictionary
+        parameters[param.name] = {"type": param_type}
     required = [
-        param.name  # Extract the name of the parameter
-        for param in signature.parameters.values()  # Iterate over each parameter in the function's signature
-        if param.default is param.empty  # Include only parameters without default values
+        param.name
+        for param in signature.parameters.values()
+        if param.default is param.empty
     ]
-    return {  # Return the function signature as a JSON-serializable dictionary
+    return {
         "type": "function",
         "function": {
-            "name": func.__name__,  # Function name
-            "description": func.__doc__ or "",  # Function description from docstring
+            "name": func.__name__,
+            "description": func.__doc__ or "",
             "parameters": {
                 "type": "object",
-                "properties": parameters,  # Parameter details
-                "required": required,  # Required parameters
+                "properties": parameters,
+                "required": required,
             },
         },
     }
@@ -90,11 +90,9 @@ class Agent(BaseModel):
     """
     name: str = "Agent"
     model: str = "gpt-4o"
-    # Use Union to allow instructions to be either a string or a callable that takes a dictionary input and returns a string
     instructions: Union[str, Callable[[dict], str]] = "You are a helpful agent."
     functions: List[AgentFunction] = []
     tool_choice: str = None
-    # Gives the option for the model to pick multiple tools in a single response, indicating that they should be called in parallel.
     parallel_tool_calls: bool = True
 
 class Response(BaseModel):
@@ -102,11 +100,11 @@ class Response(BaseModel):
     Represents a response from an agent.
 
     Attributes:
-        messages (List): A list of messages in the response.
+        events (List): A list of events that occurred during this interaction.
         agent (Optional[Agent]): The Agent we need to transfer to.
         tokens_used (int): The number of tokens used in generating the response.
     """
-    messages: List = []
+    events: List = []
     agent: Optional[Agent] = None
     tokens_used: int = 0
 
@@ -123,67 +121,69 @@ class Result(BaseModel):
 
 __CTX_VARS_NAME__ = "context_variables"
 
-def handle_function_result(raw_result, debug) -> Result:  # Define a function to process the raw_result and return a Result object
-    match raw_result:  # Use pattern matching to handle different types of results
-        case Result() as result:  # If the result is already a Result object
-            return result  # Return it directly
-        case Agent() as agent:  # If the result is an Agent object
-            return Result(  # Create a new Result object
-                value=json.dumps({"assistant": agent.name}),  # Serialize the agent's name as JSON
-                agent=agent,  # Include the agent in the Result
+def handle_function_result(raw_result, debug) -> Result:
+    match raw_result:
+        case Result() as result:
+            return result
+        case Agent() as agent:
+            return Result(
+                value=json.dumps({"assistant": agent.name}),
+                agent=agent,
             )
-        case _:  # For any other type of result
+        case _:
             try:
-                return Result(value=str(raw_result))  # Attempt to convert the result to a string and return it as a Result
-            except Exception as e:  # If conversion fails
-                error_message = f"Failed to cast response to string: {raw_result}. Make sure agent functions return a string or Result object. Error: {str(e)}"  # Prepare an error message
-                debug_print(debug, error_message)  # Print the error message if debugging is enabled
-                raise TypeError(error_message)  # Raise a TypeError with the error message
+                return Result(value=str(raw_result))
+            except Exception as e:
+                error_message = f"Failed to cast response to string: {raw_result}. Make sure agent functions return a string or Result object. Error: {str(e)}"
+                debug_print(debug, error_message)
+                raise TypeError(error_message)
 
 
 def handle_tool_calls(
-    tool_calls: List[ChatCompletionMessageToolCall],  # List of tool calls to process. This is provided by the model
-    functions: List[AgentFunction],  # List of functions to active agent has as its disposal
-    debug: bool,  # Debug flag for logging
-) -> Response:  # Returns a Response object
-    function_map = {f.__name__: f for f in functions}  # Map function names to function objects
-    tools_response = Response(messages=[], agent=None)  # Initialize an empty Response object
-    for tool_call in tool_calls:  # Iterate over each tool call
-        name = tool_call.function.name  # Get the function name from the tool call
-        if name not in function_map:  # Check if the function is not in the map
-            debug_print(debug, f"Tool {name} not found in function map.")  # Log missing tool
-            tools_response.messages.append(  # Add an error message to the tools_response
+    tool_calls: List[ChatCompletionMessageToolCall],
+    agent: Agent,
+    debug: bool,
+) -> Response:
+    function_map = {f.__name__: f for f in agent.functions}
+    tools_response = Response(messages=[], agent=None)
+    for tool_call in tool_calls:
+        name = tool_call.function.name
+        if name not in function_map:
+            debug_print(debug, f"Tool {name} not found in function map.")
+            tools_response.events.append(
                 {
-                    "role": "tool",
+                    "originator": agent.name,
+                    "event": "tool_output",
                     "tool_call_id": tool_call.id,
                     "tool_name": name,
-                    "content": f"Error: Tool {name} not found.",
+                    "content": f"Error: Tool {name} not found."
                 }
             )
-            continue  # Skip to the next tool call
-        args = json.loads(tool_call.function.arguments)  # Parse the function arguments model tools_response JSON
-        func = function_map[name]  # Retrieve the function object from the map
-        num_args = 0 # Initialize the number of arguments the function accepts to 0
-        if callable(func) and hasattr(func, '__code__'):  # Ensure func is callable and has a __code__ attribute
-            num_args = func.__code__.co_argcount # Extract the number of arguments the function accepts
-        if not args and num_args == 0: # Use the num_args variable to decide how to call the function
+            continue
+        args = json.loads(tool_call.function.arguments)
+        func = function_map[name]
+        num_args = 0
+        if callable(func) and hasattr(func, '__code__'):
+            num_args = func.__code__.co_argcount
+        if not args and num_args == 0:
             debug_print(debug, f"Calling tool: {name} with no arguments")
-            raw_result = func()  # Call the function without arguments
+            raw_result = func()
         else:
             debug_print(debug, f"Calling tool: {name} with arguments {args}")
-            raw_result = func(args)  # Call the function with arguments
-        result: Result = handle_function_result(raw_result, debug)  # Process the function result
-        tools_response.messages.append(  # Add the function result to the tools_response messages
+            raw_result = func(args)
+        result: Result = handle_function_result(raw_result, debug)
+        tools_response.events.append(
             {
-                "role": "tool",
+                "originator": agent.name,
+                "event": "tool_output",
                 "tool_call_id": tool_call.id,
                 "tool_name": name,
-                "content": result.value,
+                "content": result.value
             }
         )
-        if result.agent:  # Check if the result includes an agent
-            tools_response.agent = result.agent  # Set the agent in the tools_response
-    return tools_response  # Return the constructed tools_response
+        if result.agent:
+            tools_response.agent = result.agent
+    return tools_response
 
 class ContextManager:
     def __init__(self):
@@ -198,43 +198,63 @@ class ContextManager:
             "agent_specific": self.shared_state["agent_specific"].get(agent_name, {})
         }
 
+
+def format_event(event) -> str:
+    event_type = event["event"]
+    if event_type == "user_message":
+        return f"User: {event['content']}"
+    elif event_type == "assistant_message":
+        return f"Assistant: {event['content']}"
+    elif event_type == "tool_call":
+        return f"Tool Call: {event['tool_name']} with arguments {event['arguments']}"
+    elif event_type == "tool_output":
+        return f"Tool Output from {event['tool_name']}: {event['content']}"
+    else:
+        return f"Unknown event type: {event_type}"
+
+
 class Swarm:
     def __init__(self, client = None):
         if not client:
             client = OpenAI()
         self.client = client
-        self.context_manager = ContextManager()  # Initialize context manager
+        self.context_manager = ContextManager()
 
     def get_chat_completion(
         self,
-        agent: Agent,  # The agent to interact with
-        history: List,  # The list of messages (conversation history)
-        model_override: str,  # Optional model override
-        debug: bool,  # Whether to enable debug mode
+        agent: Agent,
+        events: List,
+        model_override: str,
+        debug: bool,
     ) -> ChatCompletion:
-        instructions = (  # Determine the instructions/system message for the agent
-            agent.instructions()  # Call the instructions function if it's callable
+        agent_instructions = (
+            agent.instructions()
             if callable(agent.instructions)
-            else agent.instructions  # Use the instructions string directly if not callable
+            else agent.instructions
         )
-        messages = [{"role": "system","content": instructions}] + history  # Prepend system instructions to the message history
-        tools = [function_to_json(func = f) for f in agent.functions]  # Convert agent functions to JSON format for tools
-        for tool in tools:  # Iterate over each tool
-            params = tool["function"]["parameters"]  # Access the function parameters
-            params["properties"].pop(__CTX_VARS_NAME__, None)  # Remove context variables from properties
-            if __CTX_VARS_NAME__ in params["required"]:  # Check if context variables are required
-                params["required"].remove(__CTX_VARS_NAME__)  # Remove context variables from required list
-        create_params = {  # Prepare parameters for the chat completion request
-            "model": model_override or agent.model,  # Use model override if provided, otherwise use agent's model
-            "messages": messages,  # Include the messages
-            "tools": tools or None,  # Include tools if available
-            "tool_choice": agent.tool_choice,  # Specify the tool choice
+        user_message_content = "\n".join(
+            format_event(event) for event in events
+        )
+        messages = [
+            {"role": "system", "content": agent_instructions},
+            {"role": "user", "content": user_message_content}
+        ]
+        tools = [function_to_json(func = f) for f in agent.functions]
+        for tool in tools:
+            params = tool["function"]["parameters"]
+            params["properties"].pop(__CTX_VARS_NAME__, None)
+            if __CTX_VARS_NAME__ in params["required"]:
+                params["required"].remove(__CTX_VARS_NAME__)
+        create_params = {
+            "model": model_override or agent.model,
+            "messages": messages,
+            "tools": tools or None,
+            "tool_choice": agent.tool_choice,
         }
-        if tools:  # If tools are available...
-            create_params["parallel_tool_calls"] = agent.parallel_tool_calls  # ...allow parallel tool calls
-        # Debug print the full create_params object
-        debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=3))  # Log the parameters if debugging
-        return self.client.chat.completions.create( **create_params)  # Make the chat completion request with the prepared parameters
+        if tools:
+            create_params["parallel_tool_calls"] = agent.parallel_tool_calls
+        debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=3))
+        return self.client.chat.completions.create( **create_params)
 
     """
     This is the current implementation of agent transfer/handover:
@@ -291,83 +311,96 @@ class Swarm:
     """
     def run(
         self,
-        user_interface_agent: Agent,  # The agent to interact with
-        messages: List,  # The list of messages (conversation history)
-        model_override: str = None,  # Optional model override
-        debug: bool = False,  # Whether to enable debug mode
-        max_sequential_turns: int = float("inf"),  # The amount of sequential turns the assistant can have before returning back to the user, default to positive infinity
-        execute_tools: bool = True,  # Whether to execute tool calls
+        agent: Agent,
+        events: List,
+        model_override: str = None,
+        debug: bool = False,
+        max_sequential_turns: int = float("inf"),
+        execute_tools: bool = True,
     ) -> Response:
         logging.basicConfig(level=logging.ERROR)
-        active_agent = user_interface_agent  # Set the active agent
-        history = copy.deepcopy(messages)  # Deep copy the message history
-        init_len = len(messages)  # Initial length of the message history
-        tokens_used = 0  # Initialize token usage counter
-        # While the length of the conversation history - the initial length of the conversation history is less than max_sequential_turns, and we have an active agent...
-        while len(history) - init_len < max_sequential_turns and active_agent:
-            agent_context = self.context_manager.get_context_for_agent(active_agent.name)
-            completion: ChatCompletion = self.get_chat_completion(  # Get ChatCompletion with current history and active agent
+        active_agent = agent
+        events_history = copy.deepcopy(events)
+        init_len = len(events)
+        tokens_used = 0
+        while len(events_history) - init_len < max_sequential_turns and active_agent:
+            # agent_context = self.context_manager.get_context_for_agent(active_agent.name)
+            completion: ChatCompletion = self.get_chat_completion(
                 agent=active_agent,
-                history=history,
+                events=events_history,
                 model_override=model_override,
                 debug=debug,
             )
-            message: ChatCompletionMessage = completion.choices[0].message  # Extract the first ChatCompletionMessage from the ChatCompletion
-            debug_print(debug, "Received completion:", str(message))  # Print the received ChatCompletionMessage
-            message.sender = active_agent.name  # Set the sender of the ChatCompletionMessage, this is used in pretty_print_messages() in repl.py
-            history.append(json.loads(message.model_dump_json()))  # Append the message to the history by converting it to JSON
-            tokens_used += completion.usage.total_tokens  # Update tokens used in interaction (prompt + response)
-            if not message.tool_calls or not execute_tools:  # Check if there are no tool calls in the ChatCompletionMessage, or if tools should not be executed
-                debug_print(debug, "Ending turn.")  # Debug print ending turn
-                break  # Exit the while loop
-            tools_response: Response = handle_tool_calls(  # Call chosen tools and retrieve result
-                tool_calls = message.tool_calls, functions = active_agent.functions, debug = debug
+            message: ChatCompletionMessage = completion.choices[0].message
+            debug_print(debug, "Received completion:", str(message))
+            if message.tool_calls:
+                for tool_call in message.tool_calls:
+                    events_history.append({
+                        "originator": active_agent.name,
+                        "event": "tool_call",
+                        "tool_call_id": tool_call.id,
+                        "tool_name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments
+                    })
+            else:
+                events_history.append({
+                    "originator": active_agent.name,
+                    "event": "assistant_message",
+                    "content": message.content,
+                })
+            tokens_used += completion.usage.total_tokens
+            if not message.tool_calls or not execute_tools:
+                debug_print(debug, "Ending turn.")
+                break
+            tools_response: Response = handle_tool_calls(
+                tool_calls = message.tool_calls, agent = active_agent, debug = debug
             )
-            history.extend(tools_response.messages)  # Extend history with tool results
-            if tools_response.agent:  # If Response contains an Agent, indicating we've transferred to a new one...
-                active_agent = tools_response.agent  # ...switch to the new agent
-
-        # Keep going until we don't call any more tools, and we break on line 316 above. We'll always have an active_agent.
-        # That condition is just there so we continue the loop
+            events_history.extend(tools_response.events)
+            if tools_response.agent:
+                active_agent = tools_response.agent
         return Response(
-            messages=history[init_len:],  # Messages from the initial length of history to the end of the array (i.e, all new messages generated in this interaction)
-            agent=active_agent,  # The active agent
-            tokens_used=tokens_used  # Total tokens used
+            events=events_history[init_len:],
+            agent=active_agent,
+            tokens_used=tokens_used
         )
 
-def pretty_print_messages(messages) -> None:
-    for message in messages:
-        if message["role"] != "assistant": # Only process messages from the assistant (agent)
-            continue
-        print(f"\033[94m{message['sender']}\033[0m:", end=" ") # Print the agent's name in blue
-        if message["content"]: # Print the message content if available
-            print(message["content"])
-        tool_calls = message.get("tool_calls") or [] # Print tool calls in purple, if any
-        if len(tool_calls) > 1:
-            print()  # Add a newline if there are multiple tool calls
-        for tool_call in tool_calls:
-            f = tool_call["function"] # Extract the function name
-            name, args = f["name"], f["arguments"] # Extract the arguments
-            arg_str = json.dumps(json.loads(args)).replace(":", "=") # Format the arguments for display
-            print(f"\033[95m{name}\033[0m({arg_str[1:-1]})") # Print the tool call in purple
+def pretty_print_messages(events) -> None:
+    for event in events:
+        originator = event["originator"]
+        event_type = event["event"]
+        if event_type == "user_message":
+            print(f"\033[90mUser\033[0m: {event['content']}")
+        elif event_type == "tool_call":
+            tool_name = event["tool_name"]
+            arguments = event["arguments"]
+            print(f"\033[94m{originator}\033[0m called tool \033[95m{tool_name}\033[0m with arguments {arguments}")
+        elif event_type == "assistant_message":
+            print(f"\033[94m{originator}\033[0m: {event['content']}")
+        elif event_type == "tool_output":
+            tool_name = event["tool_name"]
+            content = event["content"]
+            print(f"\033[94m{originator}\033[0m tool output from \033[95m{tool_name}\033[0m: {content}")
+        else:
+            print(f"\033[91mUnknown event type\033[0m: {event_type} from {originator}")
 
 def run_demo_loop(
-    starting_agent: Agent, debug = False
+    agent: Agent, debug = False
 ) -> None:
-    client = Swarm()  # Initialize a Swarm instance
+    client = Swarm()
     print("Starting Scurri AI Concierge...")
-    events = []  # Initialize the timeline of events
-    agent = starting_agent  # Set the starting agent
-    total_tokens_used = 0  # Initialize a variable to track total tokens
+    events = []
+    agent = agent
+    total_tokens_used = 0
     while True:
-        user_input = input("\033[90mUser\033[0m: ")  # Prompt the user for input...
+        user_input = input("\033[90mUser\033[0m: ")
         events.append({
+            "originator": "user",
             "event": "user_message",
             "content": user_input
         })
-        response = client.run(user_interface_agent = agent, messages = events, debug = debug)  # Run the client with the current agent and events
-        pretty_print_messages(response.messages)
-        total_tokens_used += response.tokens_used  # Update the total tokens used
-        debug_print(debug, f"Total tokens used in this session: {total_tokens_used}")  # Print the total tokens used so far in the session
-        events.extend(response.messages)  # Extend the timeline with the agent's responses
-        agent = response.agent  # Update the current agent if a transfer occurred
+        response = client.run(agent= agent, events = events, debug = debug)
+        pretty_print_messages(response.events)
+        total_tokens_used += response.tokens_used
+        debug_print(debug, f"Total tokens used in this session: {total_tokens_used}")
+        events.extend(response.events)
+        agent = response.agent

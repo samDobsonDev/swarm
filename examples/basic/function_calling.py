@@ -15,5 +15,5 @@ agent = Agent(
 
 messages = [{"role": "user", "content": "What's the weather in NYC?"}]
 
-response = client.run(agent=agent, messages=messages)
-print(response.messages[-1]["content"])
+response = client.run(agent=agent, events=messages)
+print(response.events[-1]["content"])

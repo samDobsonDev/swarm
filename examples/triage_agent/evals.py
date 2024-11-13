@@ -28,10 +28,10 @@ def run_and_get_tool_calls(agent, query):
     message = {"role": "user", "content": query}
     response = client.run(
         agent=agent,
-        messages=[message],
+        events=[message],
         execute_tools=False,
     )
-    return response.messages[-1].get("tool_calls")
+    return response.events[-1].get("tool_calls")
 
 
 @pytest.mark.parametrize(

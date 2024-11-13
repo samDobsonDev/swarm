@@ -30,7 +30,7 @@ def run_test(
     while len(history) < max_sequential_turns:
         completion: ChatCompletion = self.get_chat_completion(
             agent=agent,
-            history=history,
+            events=history,
             context_variables=context_variables,
             model_override=model_override,
             debug=debug,
@@ -56,7 +56,7 @@ def run_test(
         # If a new agent needs to be invoked, handle it in a separate chat completion
         if tool_results.agent and tool_results.agent != agent:
             # Isolate context for the new agent
-            agent_context = {"task": tool_results.messages}
+            agent_context = {"task": tool_results.events}
             agent_response = self.run_test(
                 agent=tool_results.agent,
                 # TODO: Each Agent receives the latest message from the user. They don't need to know anything else they've said in the past, or the outputs of other agents and their tools
@@ -68,9 +68,9 @@ def run_test(
                 execute_tools=execute_tools,
             )
             # Compile results back to the triage agent
-            tool_results.messages.extend(agent_response.messages)
+            tool_results.events.extend(agent_response.events)
             context_variables.update(agent_response.context_variables)
-        history.extend(tool_results.messages)
+        history.extend(tool_results.events)
         context_variables.update(tool_results.context_variables)
 
         '''

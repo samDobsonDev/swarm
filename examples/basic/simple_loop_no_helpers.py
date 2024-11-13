@@ -21,7 +21,7 @@ while True:
     user_input = input("> ")
     messages.append({"role": "user", "content": user_input})
 
-    response = client.run(agent=agent, messages=messages)
-    messages = response.messages
+    response = client.run(agent=agent, events=messages)
+    messages = response.events
     agent = response.agent
     pretty_print_messages(messages)

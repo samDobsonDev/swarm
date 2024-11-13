@@ -24,15 +24,15 @@ agent = Agent(
 context_variables = {"name": "James", "user_id": 123}
 
 response = client.run(
-    messages=[{"role": "user", "content": "Hi!"}],
+    events=[{"role": "user", "content": "Hi!"}],
     agent=agent,
     context_variables=context_variables,
 )
-print(response.messages[-1]["content"])
+print(response.events[-1]["content"])
 
 response = client.run(
-    messages=[{"role": "user", "content": "Print my account details!"}],
+    events=[{"role": "user", "content": "Print my account details!"}],
     agent=agent,
     context_variables=context_variables,
 )
-print(response.messages[-1]["content"])
+print(response.events[-1]["content"])

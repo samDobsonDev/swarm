@@ -119,7 +119,7 @@ class AssistantsEngine:
         Run the request with the selected assistant and monitor its status.
         """
         # Add message to thread
-        self.client.beta.threads.messages.create(
+        self.client.beta.threads.events.create(
             thread_id=self.thread.id,
             role="user",
             content=request
@@ -150,7 +150,7 @@ class AssistantsEngine:
         if assistant.log_flag:
             self.store_messages()
         # Retrieve and return the response (only if completed)
-        messages = self.client.beta.threads.messages.list(thread_id=self.thread.id)
+        messages = self.client.beta.threads.events.list(thread_id=self.thread.id)
         assistant_response = next((msg for msg in messages.data if msg.role == 'assistant' and msg.content), None)
         if assistant_response:
             assistant_response_text = assistant_response.content[0].text.value
@@ -195,7 +195,7 @@ class AssistantsEngine:
             print(f"No handler found for tool {tool_name}")
 
     def store_messages(self, filename="threads/thread_data.json"):
-        thread = self.client.beta.threads.messages.list(thread_id=self.thread.id)
+        thread = self.client.beta.threads.events.list(thread_id=self.thread.id)
         # Extract the required fields from each message in the thread
         messages = []
         for message in thread.data:

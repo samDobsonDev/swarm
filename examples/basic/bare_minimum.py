@@ -8,6 +8,6 @@ agent = Agent(
 )
 
 messages = [{"role": "user", "content": "Hi!"}]
-response = client.run(agent=agent, messages=messages)
+response = client.run(agent=agent, events=messages)
 
-print(response.messages[-1]["content"])
+print(response.events[-1]["content"])

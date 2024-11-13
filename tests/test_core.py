@@ -21,11 +21,11 @@ def test_run_with_simple_message(mock_openai_client: MockOpenAIClient):
     # set up client and run
     client = Swarm(client=mock_openai_client)
     messages = [{"role": "user", "content": "Hello, how are you?"}]
-    response = client.run(agent=agent, messages=messages)
+    response = client.run(agent=agent, events=messages)
 
     # assert response content
-    assert response.messages[-1]["role"] == "assistant"
-    assert response.messages[-1]["content"] == DEFAULT_RESPONSE_CONTENT
+    assert response.events[-1]["role"] == "assistant"
+    assert response.events[-1]["content"] == DEFAULT_RESPONSE_CONTENT
 
 
 def test_tool_call(mock_openai_client: MockOpenAIClient):
@@ -60,11 +60,11 @@ def test_tool_call(mock_openai_client: MockOpenAIClient):
 
     # set up client and run
     client = Swarm(client=mock_openai_client)
-    response = client.run(agent=agent, messages=messages)
+    response = client.run(agent=agent, events=messages)
 
     get_weather_mock.assert_called_once_with(location=expected_location)
-    assert response.messages[-1]["role"] == "assistant"
-    assert response.messages[-1]["content"] == DEFAULT_RESPONSE_CONTENT
+    assert response.events[-1]["role"] == "assistant"
+    assert response.events[-1]["content"] == DEFAULT_RESPONSE_CONTENT
 
 
 def test_execute_tools_false(mock_openai_client: MockOpenAIClient):
@@ -99,14 +99,14 @@ def test_execute_tools_false(mock_openai_client: MockOpenAIClient):
 
     # set up client and run
     client = Swarm(client=mock_openai_client)
-    response = client.run(agent=agent, messages=messages, execute_tools=False)
+    response = client.run(agent=agent, events=messages, execute_tools=False)
     print(response)
 
     # assert function not called
     get_weather_mock.assert_not_called()
 
     # assert tool call is present in last response
-    tool_calls = response.messages[-1].get("tool_calls")
+    tool_calls = response.events[-1].get("tool_calls")
     assert tool_calls is not None and len(tool_calls) == 1
     tool_call = tool_calls[0]
     assert tool_call["function"]["name"] == "get_weather"
@@ -138,8 +138,8 @@ def test_handoff(mock_openai_client: MockOpenAIClient):
     # set up client and run
     client = Swarm(client=mock_openai_client)
     messages = [{"role": "user", "content": "I want to talk to agent 2"}]
-    response = client.run(agent=agent1, messages=messages)
+    response = client.run(agent=agent1, events=messages)
 
     assert response.agent == agent2
-    assert response.messages[-1]["role"] == "assistant"
-    assert response.messages[-1]["content"] == DEFAULT_RESPONSE_CONTENT
+    assert response.events[-1]["role"] == "assistant"
+    assert response.events[-1]["content"] == DEFAULT_RESPONSE_CONTENT
