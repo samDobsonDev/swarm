@@ -28,3 +28,12 @@ from .types import Checked, Check
 #
 ###############################################################################
 
+
+class Event(BaseModel):
+    
+    
+    originator: Optional[str] = None
+    event: Optional[str] = None
+    tool_name: Optional[str] = None
+    content: Optional[str] = None
+    arguments: Optional[str] = None

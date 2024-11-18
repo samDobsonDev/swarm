@@ -5,6 +5,9 @@ def escalate_to_agent(reason=None):
 def valid_to_change_flight():
     return "Customer is eligible to change flight"
 
+def check_flight_availability():
+    return "Seats are available on this flight"
+
 
 def change_flight():
     return "Flight was successfully changed!"

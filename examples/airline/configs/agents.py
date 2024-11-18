@@ -53,7 +53,7 @@ def triage_instructions():
 
 
 triage_agent = Agent(
-    name="Triage Agent",
+    name="Triage",
     instructions=triage_instructions,
     functions=[transfer_to_flight_modification, transfer_to_lost_baggage],
 )
@@ -68,37 +68,51 @@ Ask user clarifying questions until you know whether or not it is a cancel reque
     parallel_tool_calls=False,
 )
 
-flight_cancellation = Agent(
-    name="Flight Cancellation Agent",
-    instructions=STARTER_PROMPT + FLIGHT_CANCELLATION_POLICY,
-    functions=[
-        escalate_to_agent,
-        initiate_refund,
-        initiate_flight_credits,
-        transfer_to_triage,
-        case_resolved,
-    ],
+def general_instructions():
+    customer_context = context_variables.get("customer_context", None)
+    flight_context = context_variables.get("flight_context", None)
+    return f"""You are a helpful customer service assistant for an airline company.
+    Your role is to handle general inquiries and pleasantries that do not require specific routing to other agents.
+    You should provide helpful and friendly responses to the user's questions.
+    We can aid the user with flight changes, flight cancellations and lost baggage requests.
+    The customer context is here: {customer_context}, and flight context is here: {flight_context}"""
+
+# Create the General agent
+general_agent = Agent(
+    name="GeneralAgent",
+    instructions=general_instructions,
+    functions=[],
 )
 
 flight_change = Agent(
-    name="Flight Change Agent",
+    name="FlightChangeAgent",
     instructions=STARTER_PROMPT + FLIGHT_CHANGE_POLICY,
     functions=[
         escalate_to_agent,
         change_flight,
         valid_to_change_flight,
-        transfer_to_triage,
+        case_resolved,
+        check_flight_availability
+    ],
+)
+
+flight_cancellation = Agent(
+    name="FlightCancellationAgent",
+    instructions=STARTER_PROMPT + FLIGHT_CANCELLATION_POLICY,
+    functions=[
+        escalate_to_agent,
+        initiate_refund,
+        initiate_flight_credits,
         case_resolved,
     ],
 )
 
 lost_baggage = Agent(
-    name="Lost Baggage Agent",
+    name="LostBaggageAgent",
     instructions=STARTER_PROMPT + LOST_BAGGAGE_POLICY,
     functions=[
         escalate_to_agent,
         initiate_baggage_search,
-        transfer_to_triage,
         case_resolved,
     ],
 )

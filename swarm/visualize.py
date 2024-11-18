@@ -1,6 +1,8 @@
+from typing import List
 from graphviz import Digraph
 from examples.airline.configs.agents import *
-from swarm.multiagent import Agent
+
+from swarm import Agent
 
 def get_unique_color():
     # Define a list of bold, easily distinguishable colors
@@ -24,14 +26,14 @@ def get_unique_color():
     get_unique_color.index = (get_unique_color.index + 1) % len(colors)
     return color
 
-def visualize_agents(initial_agent: Agent):
+def visualize_agents(agents_list: List[Agent]):
     dot = Digraph(graph_attr={
         'rankdir': 'LR',
         'splines': 'ortho',
         'nodesep': '0.5',
     })
-    agents = {initial_agent.name: initial_agent}
-    agent_queue = [initial_agent]
+    agents = {agent.name: agent for agent in agents_list}
+    agent_queue = agents_list[:]
     agent_colors = {}
     while agent_queue:
         current_agent = agent_queue.pop(0)
@@ -52,4 +54,4 @@ def visualize_agents(initial_agent: Agent):
     dot.render('multi_agent_workflow', format='png', cleanup=True)
 
 if __name__ == "__main__":
-    visualize_agents(triage_agent)
+    visualize_agents([general_agent, flight_change, flight_cancellation, lost_baggage])  # Pass a list of agents

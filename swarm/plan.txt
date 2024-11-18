@@ -1,11 +1,68 @@
-1. User types a message
-2. We call LLM using BAML functions. Depending on which Agent is the active agent, it will have its own BAML function. The prompt that is
-part of said function will include instructions specific to that agent including any policies.
-3. Using the BAML function, we force the LLM to return a structured output for tool calls, agent transfer tool calls and just normal output.
-3a. When LLM decides to call an agent transfer tool, BAML will produce structured output including a field providing relevant context to the next agent
-3b. When LLM decides to call a normal tool, we use BAML to provide structured output including the arguments to pass to said tool
-3c. When LLM decides to just produce standard output, we don't necessary need to use BAML, as there is no structure we rely on,
-but we need to use BAML so it has the option to do this, or to call a tool, which we DO need structured output for
-4. We switch to the new agent using its agent transfer tool, passing it the relevant context produced by the previous agent
-5. Repeat steps 2-4 until we receive normal output (no tool calls or agent transfer tool calls)
-6. Go back to the user with the normal output. This might include an answer, prompting for approval to execute a tool, or ask the user to provide more information
+This is the current implementation of agent transfer/handover:
+
+    1. Call LLM
+    2. LLM responds specifying it wants to use a tool or multiple tools, as well as the parameters to pass to said tool/s
+    3. We invoke the LLM's chosen tools and produce a Response object. When initializing this object we set the Agent field to None.
+    For each tool we call, we use the result of the tool call to produce a Result object. Each Result contains a value and a potential Agent, if the tool returned one.
+    The Response object has a messages field. We use the Result objects to help construct fake "LLM" response messages which we add to the conversation history.
+    Each message adheres to the following schema:
+    {
+        "role": "tool",
+        "tool_call_id": tool_call.id,
+        "tool_name": name, # Name of the function called, e.g. "transfer_to_triage"
+        "content": result.value, # This will be the agent's name, e.g. "Triage Agent"
+    }
+    5. When all the tools have been invoked from the LLM's response (Step 2), we then add the Response.messages to the conversation history. This includes the
+    result of each tool call which provides context to the LLM going forward. If Response.agent is populated and different the current active_agent, we change the active_agent to said agent.
+    6. Go through this loop again and again until all agent transfers and tool calls have been made (Steps 1-5).
+    7. At this point we'll call the LLM one more time with the new conversation history. At this point no tools will be invoked and
+    we'll just receive a normal response from the LLM, which we will go back to the user with. During this call, the LLM will
+    have context an all agent transfers and tool calls that have happened, which their resulting values. This gives it all the context
+    it needs to produce a response for the user.
+
+    NOTE: In this design, the user communicates with whatever the active agent is at the time. There isn't a
+    centralized agent that the user communicates with exclusively and that hands over to other agents with the intentioned that they will
+    relay any information they uncover back to this centralized agent. This approach solves the problem of an agentic system where there is only
+    one agent, which is that above around 5-10 tool options, the agent can begin to make mistakes on which tool to pick and when. With this
+    multi-agent approach, each agent has a specific domain they work in with a set selection of tools.
+
+    TODO: Currently, each agent receives the full conversation history thus far as it is constantly amended to by each agent. The only thing that changes is the system message
+    that each agent receives. This means that agents are potentially receiving unnecessary information from the conversation history in order to complete their task.
+    I need to devise a way in which when we transfer to another agent, it only receives the context it needs and not the conversation history.
+    This way, we can keep each agent on task and minimize hallucinations.
+
+    One way to approach this might be having the agents share some overall state, which is similar to what we do now with amending the conversation history with more and more
+    messages (that includes tools calls, results of tool calls, agent transfer and normal conversation history).
+    The difference is this state will be more concentrated and include less bloat, and can include any agent transfers, tool calls and their results by agents, as well as the conversation history.
+    This state would also be in chronological order to provide context to the LLM as to when tool calls, agent transfers or normal conversation occurred.
+    This means we essentially provide a timeline to the LLM. In this approach, similarly to the current approach, the user wouldn't be communicating exclusively with the top-level/centralized agent
+    in the conversation, but rather would be communicating with whatever the active agent is at the time.
+
+    However, there is a downside to this solution. Take staff in a store as an example. Let's say a customer walks in a says to the store manager "Hi there, I need to return this device, it doesn't work. Can I get a replacement?".
+    The store manager analyses the situation and the device, where they concur that the item is indeed damaged, the battery is broken. The store manager decides to hand this over to a supervisor, to see if the purchase is eligible for
+    a replacement, or if the only option is a refund. The supervisor doesn't need to know the details of the item and how it's damaged, just that the store manager has asked them to check if the purchase is eligible
+    for a replacement or refund, indicating that the store manager has previously checked the item and approved the return. The supervisor performs their checks and determines that the customer can receive a replacement device.
+    The supervisor hands this over to the stock clerk to locate the replacement product. The stock clerk doesn't need to know context of what this item is for, or that it's a replacement for a damaged device, or how the device
+    was damaged, just that it needs to locate the replacement product. See where I'm going with this? The context provided to each staff member in the store is limited to only essential information in order to allow the
+    staff member to complete their task. They don't need to know the entire story from when the customer entered the store. The above approach neglects this, and allows the stock clerk to gain insight into how the product the
+    customer initially bought was damaged, which is just unnecessary information and doesn't impact the task of the stock clerk in anyway, other than just overloading it with irrelevant information.
+    It isn't in the best interest of a sub-agent to know the entire context of the session, just the relevant details to ensure the agent stays on task and is as efficient as possible.
+
+    So taking this into account, what is a suitable approach? What agent/s should the user communicate with (centralized vs active agent)? How should we construct the context that each sub-agent receives as it is transferred to?
+
+Plan:
+
+    1. User types a message
+    2. We call BAML to determine the most appropriate agent to handle this situation.
+    In this BAML call we provide the LLM with a list of events that have happened in the conversation so that (user messages, assistant messages, tool calls, agent selection)
+    3. Once we have determined the agent to use, we call BAML once again with all the events that have occurred in the conversation thus far.
+    The output of this BAML call will be a tool/function that the agent wishes to call and the arguments to pass to it, or a simple message
+    4. We repeat step 3 until the LLM decides it doesn't want to call any tools/functions anymore and simply responds with a message
+    5. Repeat step 1-4 for the main loop
+
+RAG:
+
+    For RAG, each document we retrieve will be added to the events. These events will be omitted from the BAML
+    function to determine the agent to use, as it's not needed there, but will be present when we call the LLM
+    for real to provide it with extra context. As for the actual retrieval process, we will use the user's messages
+    as the query.

@@ -39,10 +39,18 @@ def all_succeeded(checks: Dict[CheckName, Check]) -> bool:
 
 
 
-class MyClass(str, Enum):
+class AgentName(str, Enum):
     
-    Refund = "Refund"
-    CancelOrder = "CancelOrder"
-    TechnicalSupport = "TechnicalSupport"
-    AccountIssue = "AccountIssue"
-    Question = "Question"
+    GeneralAgent = "GeneralAgent"
+    FlightCancellationAgent = "FlightCancellationAgent"
+    FlightChangeAgent = "FlightChangeAgent"
+    LostBaggageAgent = "LostBaggageAgent"
+
+class Event(BaseModel):
+    
+    
+    originator: str
+    event: str
+    tool_name: Optional[str] = None
+    content: Optional[str] = None
+    arguments: Optional[str] = None

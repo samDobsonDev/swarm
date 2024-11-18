@@ -14,6 +14,10 @@ from openai import OpenAI
 from openai.types.chat import ChatCompletionMessage, ChatCompletion
 from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
 
+# BAML imports
+from swarm.baml_client.types import AgentName
+from swarm.baml_client.sync_client import b as baml
+
 def debug_print(debug: bool, *args: str) -> None:
     if not debug: return
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -216,11 +220,14 @@ def format_event(event) -> str:
 
 
 class Swarm:
-    def __init__(self, client = None):
+    def __init__(self,  agents: List[Agent], client=None):
         if not client:
             client = OpenAI()
         self.client = client
         self.context_manager = ContextManager()
+        if not agents or len(agents) == 0:
+            raise ValueError("You must provide at least one agent")
+        self.agents = agents
 
     def get_chat_completion(
         self,
@@ -263,65 +270,11 @@ class Swarm:
         }
         if tools:
             create_params["parallel_tool_calls"] = agent.parallel_tool_calls
-        debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=3))
+        # debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=3))
         return self.client.chat.completions.create( **create_params)
 
-    """
-    This is the current implementation of agent transfer/handover:
-    
-    1. Call LLM
-    2. LLM responds specifying it wants to use a tool or multiple tools, as well as the parameters to pass to said tool/s
-    3. We invoke the LLM's chosen tools and produce a Response object. When initializing this object we set the Agent field to None.
-    For each tool we call, we use the result of the tool call to produce a Result object. Each Result contains a value and a potential Agent, if the tool returned one.
-    The Response object has a messages field. We use the Result objects to help construct fake "LLM" response messages which we add to the conversation history.
-    Each message adheres to the following schema:
-    {
-        "role": "tool",
-        "tool_call_id": tool_call.id,
-        "tool_name": name, # Name of the function called, e.g. "transfer_to_triage"
-        "content": result.value, # This will be the agent's name, e.g. "Triage Agent"
-    }
-    5. When all of the tools have been invoked from the LLM's response (Step 2), we then add the Response.messages to the conversation history. This includes the 
-    result of each tool call which provides context to the LLM going forward. If Response.agent is populated and different the current active_agent, we change the active_agent to said agent.
-    6. Go through this loop again and again until all agent transfers and tool calls have been made (Steps 1-5).
-    7. At this point we'll call the LLM one more time with the new conversation history. At this point no tools will be invoked and
-    we'll just receive a normal response from the LLM, which we will go back to the user with. During this call, the LLM will
-    have context an all agent transfers and tool calls that have happened, which their resulting values. This gives it all the context
-    it needs to produce a response for the user. 
-    
-    NOTE: In this design, the user communicates with whatever the active agent is at the time. There isn't a 
-    centralized agent that the user communicates with exclusively and that hands over to other agents with the intentioned that they will
-    relay any information they uncover back to this centralized agent. This approach solves the problem of an agentic system where there is only
-    one agent, which is that above around 5-10 tool options, the agent can begin to make mistakes on which tool to pick and when. With this 
-    multi-agent approach, each agent has a specific domain they work in with a set selection of tools.
-    
-    TODO: Currently, each agent receives the full conversation history thus far as it is constantly amended to by each agent. The only thing that changes is the system message
-    that each agent receives. This means that agents are potentially receiving unnecessary information from the conversation history in order to complete their task.
-    I need to devise a way in which when we transfer to another agent, it only receives the context it needs and not the conversation history.
-    This way, we can keep each agent on task and minimize hallucinations. 
-    
-    One way to approach this might be having the agents share some overall state, which is similar to what we do now with amending the conversation history with more and more
-    messages (that includes tools calls, results of tool calls, agent transfer and normal conversation history).
-    The difference is this state will be more concentrated and include less bloat, and can include any agent transfers, tool calls and their results by agents, as well as the conversation history. 
-    This state would also be in chronological order to provide context to the LLM as to when tool calls, agent transfers or normal conversation occurred.
-    This means we essentially provide a timeline to the LLM. In this approach, similarly to the current approach, the user wouldn't be communicating exclusively with the top-level/centralized agent 
-    in the conversation, but rather would be communicating with whatever the active agent is at the time. 
-    
-    However, there is a downside to this solution. Take staff in a store as an example. Let's say a customer walks in a says to the store manager "Hi there, I need to return this device, it doesn't work. Can I get a replacement?".
-    The store manager analyses the situation and the device, where they concur that the item is indeed damaged, the battery is broken. The store manager decides to hand this over to a supervisor, to see if the purchase is eligible for
-    a replacement, or if the only option is a refund. The supervisor doesn't need to know the details of the item and how it's damaged, just that the store manager has asked them to check if the purchase is eligible
-    for a replacement or refund, indicating that the store manager has previously checked the item and approved the return. The supervisor performs their checks and determines that the customer can receive a replacement device.
-    The supervisor hands this over to the stock clerk to locate the replacement product. The stock clerk doesn't need to know context of what this item is for, or that it's a replacement for a damaged device, or how the device
-    was damaged, just that it needs to locate the replacement product. See where I'm going with this? The context provided to each staff member in the store is limited to only essential information in order to allow the
-    staff member to complete their task. They don't need to know the entire story from when the customer entered the store. The above approach neglects this, and allows the stock clerk to gain insight into how the product the
-    customer initially bought was damaged, which is just unnecessary information and doesn't impact the task of the stock clerk in anyway, other than just overloading it with irrelevant information. 
-    It isn't in the best interest of a sub-agent to know the entire context of the session, just the relevant details to ensure the agent stays on task and is as efficient as possible.
-    
-    So taking this into account, what is a suitable approach? What agent/s should the user communicate with (centralized vs active agent)? How should we construct the context that each sub-agent receives as it is transferred to? 
-    """
     def run(
         self,
-        agent: Agent,
         events: List,
         model_override: str = None,
         debug: bool = False,
@@ -329,13 +282,17 @@ class Swarm:
         execute_tools: bool = True,
     ) -> Response:
         logging.basicConfig(level=logging.ERROR)
-        active_agent = agent
+        # TODO: Before we call this, we need to confirm that the last event in events is a "user_message"
+        agent_name: AgentName = baml.DecideAgentForEvents(events)
+        active_agent = next((agent for agent in self.agents if agent.name == agent_name), None)
+        if not active_agent:
+            raise ValueError(f"No agent found with the name {agent_name}")
+        debug_print(debug, "Chosen Agent:", active_agent.name)
         events_history = copy.deepcopy(events)
         init_len = len(events)
         total_input_tokens = 0
         total_output_tokens = 0
-        while len(events_history) - init_len < max_sequential_turns and active_agent:
-            # agent_context = self.context_manager.get_context_for_agent(active_agent.name)
+        while len(events_history) - init_len < max_sequential_turns:
             completion: ChatCompletion = self.get_chat_completion(
                 agent=active_agent,
                 events=events_history,
@@ -396,12 +353,11 @@ def pretty_print_events(events):
             print(f"\033[91mUnknown event type\033[0m: {event_type} from {originator}")
 
 def run_demo_loop(
-    agent: Agent, debug = False
+    agents: List[Agent], debug = False
 ) -> None:
-    client = Swarm()
+    client = Swarm(agents = agents)
     print("Starting Scurri AI Concierge...")
     events = []
-    agent = agent
     total_input_tokens_used = 0
     total_output_tokens_used = 0
     while True:
@@ -411,7 +367,7 @@ def run_demo_loop(
             "event": "user_message",
             "content": user_input
         })
-        response = client.run(agent= agent, events = events, debug = debug)
+        response = client.run(events = events, debug = debug)
         pretty_print_events(response.events)
         debug_print(debug, "Ending turn.")
         total_input_tokens_used += response.input_tokens_used
@@ -421,4 +377,3 @@ def run_demo_loop(
             f"Total input tokens used in this session: {total_input_tokens_used}. Total output tokens used in this session: {total_output_tokens_used}. Total tokens used in this session: {total_input_tokens_used + total_output_tokens_used}"
         )
         events.extend(response.events)
-        agent = response.agent

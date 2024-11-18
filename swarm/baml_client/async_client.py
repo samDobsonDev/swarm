@@ -50,28 +50,28 @@ class BamlAsyncClient:
 
 
     
-    async def ClassifyMessageWithSymbol(
+    async def DecideAgentForEvents(
         self,
-        input: str,
+        events: List[types.Event],
         baml_options: BamlCallOptions = {},
-    ) -> List[types.MyClass]:
+    ) -> types.AgentName:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
-        tb = __tb__._tb
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
       raw = await self.__runtime.call_function(
-        "ClassifyMessageWithSymbol",
+        "DecideAgentForEvents",
         {
-          "input": input,
+          "events": events,
         },
         self.__ctx_manager.get(),
         tb,
         __cr__,
       )
-      return cast(List[types.MyClass], raw.cast_to(types, types))
+      return cast(types.AgentName, raw.cast_to(types, types))
     
 
 
@@ -84,22 +84,22 @@ class BamlStreamClient:
       self.__ctx_manager = ctx_manager
 
     
-    def ClassifyMessageWithSymbol(
+    def DecideAgentForEvents(
         self,
-        input: str,
+        events: List[types.Event],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[List[Optional[types.MyClass]], List[types.MyClass]]:
+    ) -> baml_py.BamlStream[Optional[types.AgentName], types.AgentName]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
-        tb = __tb__._tb
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
       raw = self.__runtime.stream_function(
-        "ClassifyMessageWithSymbol",
+        "DecideAgentForEvents",
         {
-          "input": input,
+          "events": events,
         },
         None,
         self.__ctx_manager.get(),
@@ -107,10 +107,10 @@ class BamlStreamClient:
         __cr__,
       )
 
-      return baml_py.BamlStream[List[Optional[types.MyClass]], List[types.MyClass]](
+      return baml_py.BamlStream[Optional[types.AgentName], types.AgentName](
         raw,
-        lambda x: cast(List[Optional[types.MyClass]], x.cast_to(types, partial_types)),
-        lambda x: cast(List[types.MyClass], x.cast_to(types, types)),
+        lambda x: cast(Optional[types.AgentName], x.cast_to(types, partial_types)),
+        lambda x: cast(types.AgentName, x.cast_to(types, types)),
         self.__ctx_manager.get(),
       )
     

@@ -1,0 +1,82 @@
+[
+  {
+    "question": "What is your return policy?",
+    "answer": "You can return any item within 30 days of purchase for a full refund, provided it is in its original condition."
+  },
+  {
+    "question": "Do you offer free shipping?",
+    "answer": "Yes, we offer free standard shipping on orders over $50."
+  },
+  {
+    "question": "How can I track my order?",
+    "answer": "Once your order is shipped, you will receive an email with a tracking number and a link to track your package."
+  },
+  {
+    "question": "Can I change or cancel my order?",
+    "answer": "You can change or cancel your order within 24 hours of placing it by contacting our customer service."
+  },
+  {
+    "question": "What payment methods do you accept?",
+    "answer": "We accept Visa, MasterCard, American Express, PayPal, and Apple Pay."
+  },
+  {
+    "question": "Do you have a physical store location?",
+    "answer": "Yes, we have several store locations. Please visit our website to find the nearest store."
+  },
+  {
+    "question": "How do I use a promo code?",
+    "answer": "Enter your promo code at checkout in the designated field to apply the discount."
+  },
+  {
+    "question": "What should I do if I receive a damaged item?",
+    "answer": "Please contact our customer service immediately with your order number and a photo of the damaged item."
+  },
+  {
+    "question": "Do you offer gift wrapping services?",
+    "answer": "Yes, we offer gift wrapping services for a small additional fee at checkout."
+  },
+  {
+    "question": "How can I contact customer service?",
+    "answer": "You can contact our customer service via email, phone, or live chat on our website."
+  },
+  {
+    "question": "What is your exchange policy?",
+    "answer": "Exchanges are allowed within 30 days of purchase for items in their original condition."
+  },
+  {
+    "question": "Do you offer international shipping?",
+    "answer": "Yes, we ship to select international locations. Shipping fees and delivery times vary by destination."
+  },
+  {
+    "question": "How do I create an account?",
+    "answer": "Click on the 'Sign Up' button on our website and fill in the required information to create an account."
+  },
+  {
+    "question": "Can I purchase a gift card online?",
+    "answer": "Yes, you can purchase both physical and digital gift cards on our website."
+  },
+  {
+    "question": "What is your price match policy?",
+    "answer": "We will match the price of any identical item found at a lower price from a competitor."
+  },
+  {
+    "question": "How do I subscribe to your newsletter?",
+    "answer": "Enter your email address in the subscription box at the bottom of our website to receive our newsletter."
+  },
+  {
+    "question": "What should I do if I forget my password?",
+    "answer": "Click on 'Forgot Password' on the login page and follow the instructions to reset your password."
+  },
+  {
+    "question": "Do you offer a loyalty program?",
+    "answer": "Yes, we offer a loyalty program that rewards points for every purchase, which can be redeemed for discounts."
+  },
+  {
+    "question": "How can I find out about sales and promotions?",
+    "answer": "Sign up for our newsletter or follow us on social media to stay updated on sales and promotions."
+  },
+  {
+    "question": "What is your policy on defective products?",
+    "answer": "If you receive a defective product, please contact our customer service for a replacement or refund."
+  }
+]
