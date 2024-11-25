@@ -77,7 +77,6 @@ def general_instructions():
     We can aid the user with flight changes, flight cancellations and lost baggage requests.
     The customer context is here: {customer_context}, and flight context is here: {flight_context}"""
 
-# Create the General agent
 general_agent = Agent(
     name="GeneralAgent",
     instructions=general_instructions,

@@ -141,7 +141,7 @@ def handle_function_result(raw_result, debug) -> Result:
                 return Result(value=str(raw_result))
             except Exception as e:
                 error_message = f"Failed to cast response to string: {raw_result}. Make sure agent functions return a string or Result object. Error: {str(e)}"
-                # debug_print(debug, error_message)
+                debug_print(debug, error_message)
                 raise TypeError(error_message)
 
 
@@ -155,7 +155,7 @@ def handle_tool_calls(
     for tool_call in tool_calls:
         name = tool_call.function.name
         if name not in function_map:
-            # debug_print(debug, f"Tool {name} not found in function map.")
+            debug_print(debug, f"Tool {name} not found in function map.")
             tools_response.events.append(
                 {
                     "originator": agent.name,
@@ -172,11 +172,11 @@ def handle_tool_calls(
         if callable(func) and hasattr(func, '__code__'):
             num_args = func.__code__.co_argcount
         if not args and num_args == 0:
-            # debug_print(debug, f"Calling tool: {name} with no arguments")
+            debug_print(debug, f"Calling tool: {name} with no arguments")
             raw_result = func()
         else:
-            # debug_print(debug, f"Calling tool: {name} with arguments {args}")
-            raw_result = func(args)
+            debug_print(debug, f"Calling tool: {name} with arguments {args}")
+            raw_result = func(**args)
         result: Result = handle_function_result(raw_result, debug)
         tools_response.events.append(
             {

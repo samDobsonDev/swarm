@@ -3,7 +3,7 @@ generator target {
   output_type "python/pydantic"
   
   // Where the generated code will be saved (relative to baml_src/)
-  output_dir "../swarm"
+  output_dir "../swarm/swarm"
   
   // What interface you prefer to use for the generated code (sync/async)
   // Both are generated regardless of the choice, just modifies what is exported
@@ -23,10 +23,9 @@ client<llm> GPT4o {
 }
 
 enum AgentName {
-  GeneralAgent @description("Handles pleasantries and general inquiries we don't need to route to other agents.")
-  FlightCancellationAgent @description("Handles flight cancellation requests.")
-  FlightChangeAgent @description("Handles flight change requests.")
-  LostBaggageAgent @description("Handles lost baggage requests.")
+  GeneralAgent @description("Handles pleasantries and general inquiries that we don't need to route to other agents.")
+  StockAlertAgent @description("Handles stock alert requests.")
+  OrderAgent @description("Handles order requests.")
 }
 
 class Event {
