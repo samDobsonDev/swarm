@@ -44,6 +44,7 @@ class AgentName(str, Enum):
     GeneralAgent = "GeneralAgent"
     StockAlertAgent = "StockAlertAgent"
     OrderAgent = "OrderAgent"
+    VerificationAgent = "VerificationAgent"
 
 class Event(BaseModel):
     

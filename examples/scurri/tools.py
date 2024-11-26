@@ -8,9 +8,12 @@ es_client = ElasticSearchClient(elastic_url = "http://54.154.188.102:9200")
 user_repo = UserRepository(es_client)
 order_repo = OrderRepository(es_client)
 
-email = "kerriedoyle@scurri.co.uk"
+email = "sam.dobsonn@gmail.com"
 company = "footasylum"
 brand = "footasylum"
+pin = "1234"
+user_id = "hbgkuHM7TaciF74+gkTwVSa5hr0="
+channel = "MESSENGER"
 
 def get_stock_alerts_tool():
     """
@@ -94,3 +97,35 @@ def get_latest_order_tool():
         return formatted_order
 
     return "No orders found."
+
+def generate_verification_pin_tool(provided_email: str):
+    """
+    Generates a verification PIN for the user.
+    """
+    # In a real scenario, you would generate a random PIN and send it to the user's email.
+    # Here, we are using a fixed PIN for demonstration purposes, neither are we sending an actual email.
+    return f"A verification PIN has been sent to {provided_email}. Please use the PIN 1234 to verify."
+
+def verify_user_tool(email: str, provided_pin: str):
+    """
+    Verifies the user by comparing the provided PIN with the expected PIN.
+    """
+    if provided_pin == pin:
+        # Call the verify_user method from UserRepository
+        update_result = user_repo.verify_user(company, brand, user_id, email, channel)
+        if update_result:
+            return f"User with email {email} has been successfully verified and updated."
+        else:
+            return f"User with email {email} could not be updated in the system."
+    return f"Verification failed for user with email {email}. Incorrect PIN."
+
+def check_verification_status_tool():
+    """
+    Checks if the user is verified.
+    """
+    # Assuming the user context is available and contains the necessary information
+    user = user_repo.find_user_by_channel_and_id(company, brand, channel, user_id)
+    if user:
+        verified_status = "Verified" if user.get('verifiedChannels') else "Not Verified"
+        return f"The user is {verified_status}."
+    return "User details not found."

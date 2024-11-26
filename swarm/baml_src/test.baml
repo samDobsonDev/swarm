@@ -3,7 +3,7 @@ generator target {
   output_type "python/pydantic"
   
   // Where the generated code will be saved (relative to baml_src/)
-  output_dir "../swarm/swarm"
+  output_dir "../swarm"
   
   // What interface you prefer to use for the generated code (sync/async)
   // Both are generated regardless of the choice, just modifies what is exported
@@ -26,6 +26,7 @@ enum AgentName {
   GeneralAgent @description("Handles pleasantries and general inquiries that we don't need to route to other agents.")
   StockAlertAgent @description("Handles stock alert requests.")
   OrderAgent @description("Handles order requests.")
+  VerificationAgent @description("Handles verification and email change requests.")
 }
 
 class Event {

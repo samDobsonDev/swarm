@@ -32,6 +32,33 @@ class UserRepository:
             }
         return None
 
+    def find_user_by_channel_and_id(self, company, brand, channel, id):
+        """
+        Finds a user by the specified channel and ID.
+        """
+        index = f"{company}_{brand}_end_user_data"
+        query = {
+            "bool": {
+                "must": [
+                    {"term": {"type.keyword": "chat_user"}},
+                    {f"term": {f"channelIds.{channel}.keyword": id}}
+                ]
+            }
+        }
+        documents = self.elastic_search_client.search_documents(index, query)
+        if documents:
+            doc = documents[0]
+            user = doc.get('_source', {})
+            return {
+                "doc_id": doc.get('_id'),
+                "firstName": user.get("firstName"),
+                "lastName": user.get("lastName"),
+                "email": user.get("email"),
+                "stockAlerts": user.get("stockAlerts"),
+                "verifiedChannels": user.get("verifiedChannels")
+            }
+        return None
+
     def get_stock_alerts(self, company, brand, email):
         """
         Retrieves stock alerts for a user by their email.
@@ -72,6 +99,31 @@ class UserRepository:
                 update_body={"stockAlerts": stock_alerts}
             )
             return stock_alerts
+        return None
+
+    def verify_user(self, company, brand, user_id, new_email, channel):
+        """
+        Verifies a user by updating their email and verifiedChannels.
+        """
+        index = f"{company}_{brand}_end_user_data"
+        user = self.find_user_by_channel_and_id(company, brand, channel, user_id)
+
+        if user:
+            # Update the email and verifiedChannels
+            verified_channels = user.get("verifiedChannels", {})
+            verified_channels[channel] = {"verifiedOn": datetime.now().isoformat()}
+
+            update_body = {
+                "email": new_email,
+                "verifiedChannels": verified_channels
+            }
+
+            self.elastic_search_client.update_document(
+                index=index,
+                doc_id=user["doc_id"],
+                update_body=update_body
+            )
+            return update_body
         return None
 
 class OrderRepository:

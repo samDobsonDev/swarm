@@ -5,5 +5,6 @@ if __name__ == "__main__":
     run_demo_loop(agents = [
         general_agent,
         stock_alert_agent,
-        order_agent
+        order_agent,
+        verification_agent
     ], debug = True)

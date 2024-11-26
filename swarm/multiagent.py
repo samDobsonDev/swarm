@@ -3,6 +3,7 @@ import copy
 import json
 import logging
 import inspect
+import time
 
 from collections import defaultdict
 from typing import List, Callable, Union, Optional
@@ -156,15 +157,16 @@ def handle_tool_calls(
         name = tool_call.function.name
         if name not in function_map:
             debug_print(debug, f"Tool {name} not found in function map.")
-            tools_response.events.append(
-                {
-                    "originator": agent.name,
-                    "event": "tool_output",
-                    "tool_call_id": tool_call.id,
-                    "tool_name": name,
-                    "content": f"Error: Tool {name} not found."
-                }
-            )
+            event = {
+                "originator": agent.name,
+                "event": "tool_output",
+                "tool_call_id": tool_call.id,
+                "tool_name": name,
+                "content": f"Error: Tool {name} not found.",
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            tools_response.events.append(event)
+            pretty_print_events([event])
             continue
         args = json.loads(tool_call.function.arguments)
         func = function_map[name]
@@ -172,21 +174,22 @@ def handle_tool_calls(
         if callable(func) and hasattr(func, '__code__'):
             num_args = func.__code__.co_argcount
         if not args and num_args == 0:
-            debug_print(debug, f"Calling tool: {name} with no arguments")
+            # debug_print(debug, f"Calling tool: {name} with no arguments")
             raw_result = func()
         else:
-            debug_print(debug, f"Calling tool: {name} with arguments {args}")
+            # debug_print(debug, f"Calling tool: {name} with arguments {args}")
             raw_result = func(**args)
         result: Result = handle_function_result(raw_result, debug)
-        tools_response.events.append(
-            {
-                "originator": agent.name,
-                "event": "tool_output",
-                "tool_call_id": tool_call.id,
-                "tool_name": name,
-                "content": result.value
-            }
-        )
+        event = {
+            "originator": agent.name,
+            "event": "tool_output",
+            "tool_call_id": tool_call.id,
+            "tool_name": name,
+            "content": result.value,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        tools_response.events.append(event)
+        pretty_print_events([event])
         if result.agent:
             tools_response.agent = result.agent
     return tools_response
@@ -270,8 +273,13 @@ class Swarm:
         }
         if tools:
             create_params["parallel_tool_calls"] = agent.parallel_tool_calls
-        # debug_print(debug, "Getting chat completion for...:", json.dumps(create_params, indent=3))
-        return self.client.chat.completions.create( **create_params)
+        debug_print(debug, "Calling LLM...")
+        start_time = time.time()
+        completion = self.client.chat.completions.create(**create_params)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        debug_print(debug, f"LLM response time: {elapsed_time:.2f} seconds")
+        return completion
 
     def run(
         self,
@@ -300,22 +308,27 @@ class Swarm:
                 debug=debug,
             )
             message: ChatCompletionMessage = completion.choices[0].message
-            # debug_print(debug, "Received completion:", str(message))
             if message.tool_calls:
                 for tool_call in message.tool_calls:
-                    events_history.append({
+                    event = {
                         "originator": active_agent.name,
                         "event": "tool_call",
                         "tool_call_id": tool_call.id,
                         "tool_name": tool_call.function.name,
-                        "arguments": tool_call.function.arguments
-                    })
+                        "arguments": tool_call.function.arguments,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    events_history.append(event)
+                    pretty_print_events([event])
             else:
-                events_history.append({
+                event = {
                     "originator": active_agent.name,
                     "event": "assistant_message",
                     "content": message.content,
-                })
+                    "timestamp": datetime.now().isoformat()
+                }
+                events_history.append(event)
+                pretty_print_events([event])
             total_input_tokens += completion.usage.prompt_tokens
             total_output_tokens += completion.usage.completion_tokens
             if not message.tool_calls or not execute_tools:
@@ -336,21 +349,23 @@ class Swarm:
 def pretty_print_events(events):
     for event in events:
         originator = event["originator"]
+        timestamp = event["timestamp"]
         event_type = event["event"]
         if event_type == "user_message":
-            print(f"\033[90mUser\033[0m: {event['content']}")
+            print(f"\033[90mUser [{timestamp}]\033[0m: {event['content']}")
         elif event_type == "tool_call":
             tool_name = event["tool_name"]
             arguments = event["arguments"]
-            print(f"\033[94m{originator}\033[0m called tool \033[95m{tool_name}\033[0m with arguments {arguments}")
+            print(
+                f"\033[94m[{timestamp}] {originator}\033[0m called tool \033[95m{tool_name}\033[0m with arguments {arguments}")
         elif event_type == "assistant_message":
-            print(f"\033[94m{originator}\033[0m: {event['content']}")
+            print(f"\033[94m[{timestamp}] {originator}\033[0m: {event['content']}")
         elif event_type == "tool_output":
             tool_name = event["tool_name"]
             content = event["content"]
-            print(f"\033[94m{originator}\033[0m tool output from \033[95m{tool_name}\033[0m: {content}")
+            print(f"\033[94m[{timestamp}] {originator}\033[0m tool output from \033[95m{tool_name}\033[0m: {content}")
         else:
-            print(f"\033[91mUnknown event type\033[0m: {event_type} from {originator}")
+            print(f"\033[91mUnknown event type\033[0m: {event_type} from {originator} [{timestamp}]")
 
 def run_demo_loop(
     agents: List[Agent], debug = False
@@ -361,14 +376,13 @@ def run_demo_loop(
     total_input_tokens_used = 0
     total_output_tokens_used = 0
     while True:
-        user_input = input("\033[90mUser\033[0m: ")
+        user_input = input("\033[92mUser\033[0m: ")
         events.append({
             "originator": "user",
             "event": "user_message",
             "content": user_input
         })
         response = client.run(events = events, debug = debug)
-        pretty_print_events(response.events)
         debug_print(debug, "Ending turn.")
         total_input_tokens_used += response.input_tokens_used
         total_output_tokens_used += response.output_tokens_used
