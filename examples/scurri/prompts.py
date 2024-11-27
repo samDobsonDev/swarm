@@ -7,7 +7,6 @@ es_client = ElasticSearchClient("http://54.154.188.102:9200")
 user_repo = UserRepository(es_client)
 
 def get_customer_context():
-    # user = user_repo.find_user_by_email("footasylum", "footasylum", email)
     user = user_repo.find_user_by_channel_and_id(company, brand, channel, user_id)
     if user:
         verified_status = "Verified" if user.get('verifiedChannels') else "Not Verified"
