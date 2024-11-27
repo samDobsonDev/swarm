@@ -316,7 +316,7 @@ class Swarm:
                         "tool_call_id": tool_call.id,
                         "tool_name": tool_call.function.name,
                         "arguments": tool_call.function.arguments,
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
                     events_history.append(event)
                     pretty_print_events([event])
@@ -325,7 +325,7 @@ class Swarm:
                     "originator": active_agent.name,
                     "event": "assistant_message",
                     "content": message.content,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 events_history.append(event)
                 pretty_print_events([event])

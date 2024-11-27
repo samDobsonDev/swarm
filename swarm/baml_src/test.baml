@@ -11,7 +11,7 @@ generator target {
   default_client_mode "sync"
   
   // Version of runtime to generate code for (should match installed baml-py version)
-  version "0.68.0"
+  version "0.69.0"
 }
 
 client<llm> GPT4o {
@@ -25,7 +25,7 @@ client<llm> GPT4o {
 enum AgentName {
   GeneralAgent @description("Handles pleasantries and general inquiries that we don't need to route to other agents.")
   StockAlertAgent @description("Handles stock alert requests.")
-  OrderAgent @description("Handles order requests.")
+  OrderAndShipmentAgent @description("Handles order and shipment requests.")
   VerificationAgent @description("Handles verification and email change requests.")
 }
 

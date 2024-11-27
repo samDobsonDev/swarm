@@ -130,39 +130,9 @@ class OrderRepository:
     def __init__(self, elastic_search_client):
         self.elastic_search_client = elastic_search_client
 
-    def find_completed_orders_by_email(self, company, brand, email):
-        """
-        Finds completed orders for a user by their email.
-        """
-        index = f"{company}_{brand}_hdorder"
-        query = {
-            "bool": {
-                "must": [
-                    {"term": {"customerEmail.keyword": email}},
-                    {"term": {"orderState.keyword": "COMPLETE"}}
-                ]
-            }
-        }
-        return self.elastic_search_client.search_documents(index, query)
-
-    def find_incomplete_orders_by_email(self, company, brand, email):
-        """
-        Finds incomplete orders for a user by their email.
-        """
-        index = f"{company}_{brand}_hdorder"
-        query = {
-            "bool": {
-                "must": [
-                    {"term": {"customerEmail.keyword": email}},
-                    {"term": {"orderState.keyword": "INCOMPLETE"}}
-                ]
-            }
-        }
-        return self.elastic_search_client.search_documents(index, query)
-
     def get_users_latest_order(self, company, brand, email):
         """
-        Returns the latest order for a user by their email, regardless of order state.
+        Returns the latest order for a user by their email, extracting relevant details.
         """
         index = f"{company}_{brand}_hdorder"
         query = {
@@ -175,4 +145,77 @@ class OrderRepository:
         # Sort by orderDateTime in descending order to get the latest order
         sort = [{"orderDateTime": {"order": "desc"}}]
         documents = self.elastic_search_client.search_documents(index, query, sort=sort, size=1)
-        return documents[0] if documents else None
+
+        if not documents:
+            return None
+
+        # Extract relevant fields from the latest order document
+        latest_order_doc = documents[0]
+        source = latest_order_doc.get('_source', {})
+        order_info = {
+            "orderState": source.get("orderState"),
+            "orderNumber": source.get("orderNumber"),
+            "orderDateTime": source.get("orderDateTime"),
+            "totalIncVat": source.get("totalIncVat"),
+            "orderCurrency": source.get("orderCurrency"),
+            "orderItems": source.get("orderItems"),
+            "payments": source.get("payments")
+        }
+
+        return order_info
+
+    def get_shipment_details_by_order_number(self, company, brand, email, order_number):
+        """
+        Retrieves shipment details for a given order number and email.
+        """
+        index = f"{company}_{brand}_hdorder"
+        # Check if the order exists
+        order_query = {
+            "bool": {
+                "must": [
+                    {"term": {"customerEmail.keyword": email}},
+                    {"term": {"orderNumber.keyword": order_number}}
+                ]
+            }
+        }
+        order_documents = self.elastic_search_client.search_documents(index, order_query)
+
+        if not order_documents:
+            return None
+
+        # Find matching shipping items
+        shipping_query = {
+            "bool": {
+                "must": [
+                    {"term": {"orderNumber.keyword": order_number}},
+                    {"term": {"type.keyword": "shipping_item"}}
+                ]
+            }
+        }
+        shipping_documents = self.elastic_search_client.search_documents(index, shipping_query)
+
+        if not shipping_documents:
+            return None
+
+        # Extract relevant fields from each document
+        shipment_details = []
+        for doc in shipping_documents:
+            source = doc.get('_source', {})
+            shipment_info = {
+                "trackingUrl": source.get("trackingUrl"),
+                "eta": source.get("eta"),
+                "orderNumber": source.get("orderNumber"),
+                "trackingNumber": source.get("trackingNumber"),
+                "address": {
+                    "fullName": source.get("shipToFullName"),
+                    "addressLine1": source.get("shipToAddressLine1"),
+                    "city": source.get("shipToCity"),
+                    "postcode": source.get("shipToPostcode"),
+                    "country": source.get("shipToCountry")
+                },
+                "carrier": source.get("carrierShippingMethodCode"),
+                "shippingMethod": source.get("shippingMethod", {}).get("type")
+            }
+            shipment_details.append(shipment_info)
+
+        return shipment_details if shipment_details else None

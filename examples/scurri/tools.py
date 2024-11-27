@@ -30,7 +30,7 @@ def add_stock_alert_tool(product_id: str):
     """
     stock_alerts = user_repo.add_stock_alert(company, brand, email, product_id)
     if stock_alerts is not None:
-        return f"Stock alert added. Current alerts: {stock_alerts}"
+        return f"Stock alert added."
     return "Failed to add stock alert."
 
 def remove_stock_alert_tool(product_id: str):
@@ -39,68 +39,65 @@ def remove_stock_alert_tool(product_id: str):
     """
     stock_alerts = user_repo.remove_stock_alert(company, brand, email, product_id)
     if stock_alerts is not None:
-        return f"Stock alert removed. Current alerts: {stock_alerts}"
+        return f"Stock alert removed."
     return "Failed to remove stock alert."
 
-def get_completed_orders_tool():
+def format_order_details(order_info):
     """
-    Retrieves the user's completed orders
+    Formats the order details into a natural language description.
     """
-    completed_orders = order_repo.find_completed_orders_by_email(company, brand, email)
-    if completed_orders:
-        return f"Completed orders: {completed_orders}"
-    return "No completed orders found."
+    order_state = order_info['orderState']
+    order_status = {
+        "INCOMPLETE": "The order is being prepared for shipment.",
+        "COMPLETE": "The order has been delivered.",
+        # Add more states as needed
+    }.get(order_state, f"The order is currently in {order_state} state.")
 
-def get_incomplete_orders_tool():
-    """
-    Retrieves the user's incomplete orders
-    """
-    incomplete_orders = order_repo.find_incomplete_orders_by_email(company, brand, email)
-    if incomplete_orders:
-        return f"Incomplete orders: {incomplete_orders}"
-    return "No incomplete orders found."
+    formatted_order = (
+        f"Order number {order_info['orderNumber']} was placed on {order_info['orderDateTime']}. "
+        f"The total amount for this order is {order_info['totalIncVat']} {order_info['orderCurrency']}, "
+        f"including VAT at a rate of {order_info['vatRate']}%. "
+        f"The order is under the name of {order_info['customerFullName']} and will be sent to the email {order_info['customerEmail']}. "
+        f"{order_status} "
+        f"The order includes the following items: "
+    )
 
+    for item in order_info['orderItems']:
+        formatted_order += (
+            f"{item['itemDescription1']} in size {item['itemSize']} and color {item['itemColour']}, "
+            f"which costs {item['unitCostIncVat']} {order_info['orderCurrency']}. "
+        )
+
+    formatted_order += "The payment details are as follows: "
+    for payment in order_info['payments']:
+        formatted_order += (
+            f"A payment of {payment['chargeAmount']} was made using {payment['paymentType']}, "
+            f"with the reference {payment['paymentReference']}. "
+        )
+
+    return formatted_order
 
 def get_latest_order_tool():
     """
-    Retrieves the user's latest order
+    Retrieves information regarding the user's latest order.
     """
     latest_order = order_repo.get_users_latest_order(company, brand, email)
     if latest_order:
-        order_info = latest_order["_source"]
-        formatted_order = (
-            f"Order Number: {order_info['orderNumber']}\n"
-            f"Order Date: {order_info['orderDateTime']}\n"
-            f"Order State: {order_info['orderState']}\n"
-            f"Currency: {order_info['orderCurrency']}\n"
-            f"Total (Excluding VAT): {order_info['totalExVAT']}\n"
-            f"Total (Including VAT): {order_info['totalIncVat']}\n"
-            f"VAT Rate: {order_info['vatRate']}%\n"
-            f"Customer: {order_info['customerFullName']} ({order_info['customerEmail']})\n"
-            f"Items:\n"
-        )
-
-        for item in order_info['orderItems']:
-            formatted_order += (
-                f"  - {item['itemDescription1']} (Size: {item['itemSize']}, "
-                f"Colour: {item['itemColour']}, State: {item['itemState']}, "
-                f"Cost: {item['unitCostIncVat']}{order_info['orderCurrency']})\n"
-            )
-
-        formatted_order += "Payments:\n"
-        for payment in order_info['payments']:
-            formatted_order += (
-                f"  - Type: {payment['paymentType']}, Amount: {payment['chargeAmount']}, "
-                f"Reference: {payment['paymentReference']}\n"
-            )
-
-        return formatted_order
-
+        return f"Order details: {latest_order}"
     return "No orders found."
+
+def get_shipment_details_tool(order_number: str):
+    """
+    Retrieves shipment details for a given order number.
+    """
+    shipment_details = order_repo.get_shipment_details_by_order_number(company, brand, email, order_number)
+    if shipment_details:
+        return f"Shipment details: {shipment_details}"
+    return "No shipment details found for the given order number."
 
 def generate_verification_pin_tool(provided_email: str):
     """
-    Generates a verification PIN for the user.
+    Generates a verification PIN for the user and sends it to the email address they wish to verify with.
     """
     # In a real scenario, you would generate a random PIN and send it to the user's email.
     # Here, we are using a fixed PIN for demonstration purposes, neither are we sending an actual email.
@@ -111,7 +108,6 @@ def verify_user_tool(email: str, provided_pin: str):
     Verifies the user by comparing the provided PIN with the expected PIN.
     """
     if provided_pin == pin:
-        # Call the verify_user method from UserRepository
         update_result = user_repo.verify_user(company, brand, user_id, email, channel)
         if update_result:
             return f"User with email {email} has been successfully verified and updated."
@@ -123,7 +119,6 @@ def check_verification_status_tool():
     """
     Checks if the user is verified.
     """
-    # Assuming the user context is available and contains the necessary information
     user = user_repo.find_user_by_channel_and_id(company, brand, channel, user_id)
     if user:
         verified_status = "Verified" if user.get('verifiedChannels') else "Not Verified"

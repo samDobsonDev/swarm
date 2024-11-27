@@ -43,12 +43,10 @@ class AgentName(str, Enum):
     
     GeneralAgent = "GeneralAgent"
     StockAlertAgent = "StockAlertAgent"
-    OrderAgent = "OrderAgent"
+    OrderAndShipmentAgent = "OrderAndShipmentAgent"
     VerificationAgent = "VerificationAgent"
 
 class Event(BaseModel):
-    
-    
     originator: str
     event: str
     tool_name: Optional[str] = None
