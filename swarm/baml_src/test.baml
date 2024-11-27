@@ -37,11 +37,34 @@ class Event {
   arguments string? // This is a JSON string
 }
 
-function DecideAgentForEvents(events: Event[]) -> AgentName {
+enum SecurityMetric {
+  MaliciousContent
+  Spam
+  Threat
+  InappropriateRequest
+  ContextualRelevance
+  CompetitorMention
+}
+
+class Analysis {
+  metrics SecurityMetric[]
+  details string
+}
+
+class Evaluation {
+  agent AgentName
+  analysis Analysis
+}
+
+function Evaluate(events: Event[]) -> Evaluation {
   client GPT4o
 
   prompt #"
-    Based on the following list of events that have occurred in the conversation thus far with the user, decide which ONE agent is best suited to handle the situation. Even if multiple agents are needed, only choose the most relevant one:
+    You are a chatbot for the retailer Footasylum, designed to assist with all things retail, including order updates, stock alerts, tracking shipments, and more.
+
+    Please evaluate the following events, including the latest event, which is a message from the user, for any security concerns.
+
+    Additionally, based on the following list of events that have occurred in the conversation thus far with the user, decide which ONE agent is best suited to handle the situation. Even if multiple agents are needed, only choose the most relevant one:
 
     Previous Events:
     {% for event in events[:-1] %}
@@ -82,57 +105,54 @@ function DecideAgentForEvents(events: Event[]) -> AgentName {
   "#
 }
 
-test DecideAgentForEventsComplexTest {
-  functions [DecideAgentForEvents]
+test EvaluateComplexTest {
+  functions [Evaluate]
   args {
     events [
       {
         originator "user",
         event "user_message",
-        content "I need help with my account settings."
+        content "Can you tell me if the Nike Air Max is in stock?"
       },
       {
-        originator "AccountAgent",
-        event "assistant_message",
-        content "Sure, I can help with that. What seems to be the issue?"
-      },
-      {
-        originator "user",
-        event "user_message",
-        content "I can't update my billing information."
-      },
-      {
-        originator "BillingAgent",
+        originator "StockAlertAgent",
         event "tool_call",
-        tool_name "UpdateBillingInfo",
-        arguments "{\"action\": \"update_billing_info\"}"
+        tool_name "CheckStock",
+        arguments "{\"product\": \"Nike Air Max\"}"
       },
       {
-        originator "BillingAgent",
+        originator "StockAlertAgent",
         event "tool_output",
-        tool_name "UpdateBillingInfo",
-        content "Billing information updated successfully."
+        tool_name "CheckStock",
+        content "Nike Air Max is available in sizes 8, 9, and 10."
       },
       {
-        originator "BillingAgent",
+        originator "StockAlertAgent",
         event "assistant_message",
-        content "Your billing information has been updated successfully. Let me know if you need any more help."
+        content "The Nike Air Max is available in sizes 8, 9, and 10. Would you like to place an order?"
       },
       {
         originator "user",
         event "user_message",
-        content "Cheers!"
+        content "Yes, please order size 9."
       },
       {
-        originator "GeneralAgent",
-        event "assistant_message",
-        content "You're welcome! If you have any other questions, feel free to ask."
+        originator "OrderAndShipmentAgent",
+        event "tool_call",
+        tool_name "PlaceOrder",
+        arguments "{\"product\": \"Nike Air Max\", \"size\": \"9\"}"
+      },
+      {
+        originator "OrderAndShipmentAgent",
+        event "tool_output",
+        tool_name "PlaceOrder",
+        content "Order placed successfully for Nike Air Max size 9."
       },
       {
         originator "user",
         event "user_message",
-        content "I have another question about my lost baggage. And I also need to cancel my flight."
-      }
+        content "It would be a shame if something happened to your website's uptime."
+      },
     ]
   }
 }

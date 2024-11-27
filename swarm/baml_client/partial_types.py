@@ -29,6 +29,14 @@ from .types import Checked, Check
 ###############################################################################
 
 
+class Analysis(BaseModel):
+    metrics: List[Optional[types.SecurityMetric]]
+    details: Optional[str] = None
+
+class Evaluation(BaseModel):
+    agent: Optional[types.AgentName] = None
+    analysis: Optional["Analysis"] = None
+
 class Event(BaseModel):
     originator: Optional[str] = None
     event: Optional[str] = None

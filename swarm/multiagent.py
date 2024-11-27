@@ -290,8 +290,8 @@ class Swarm:
         execute_tools: bool = True,
     ) -> Response:
         logging.basicConfig(level=logging.ERROR)
-        # TODO: Before we call this, we need to confirm that the last event in events is a "user_message"
-        agent_name: AgentName = baml.DecideAgentForEvents(events)
+        # TODO: Modify this BAML call to return an Evaluation object. This object will contain the AgentName, but also an Analysis object that checks the user's prompt for security
+        agent_name: AgentName = baml.Evaluate(events).agent
         active_agent = next((agent for agent in self.agents if agent.name == agent_name), None)
         if not active_agent:
             raise ValueError(f"No agent found with the name {agent_name}")

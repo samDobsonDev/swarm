@@ -46,6 +46,23 @@ class AgentName(str, Enum):
     OrderAndShipmentAgent = "OrderAndShipmentAgent"
     VerificationAgent = "VerificationAgent"
 
+class SecurityMetric(str, Enum):
+    
+    MaliciousContent = "MaliciousContent"
+    Spam = "Spam"
+    Threat = "Threat"
+    InappropriateRequest = "InappropriateRequest"
+    ContextualRelevance = "ContextualRelevance"
+    CompetitorMention = "CompetitorMention"
+
+class Analysis(BaseModel):
+    metrics: List["SecurityMetric"]
+    details: str
+
+class Evaluation(BaseModel):
+    agent: "AgentName"
+    analysis: "Analysis"
+
 class Event(BaseModel):
     originator: str
     event: str

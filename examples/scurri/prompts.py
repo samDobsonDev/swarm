@@ -66,11 +66,13 @@ STOCK_ALERT_POLICY = f"""
 ORDER_AND_SHIPMENT_POLICY = f"""
 1. If the customer requests information relating to their order:
    - Call the 'get_latest_order_tool' function to retrieve information regarding the user's latest order.
-   - Extract the relevant information required and respond to the user.
+   - Extract ONLY the relevant information required
+   - Inform the customer.
 2. If the customer requests shipment details:
    - If an order number has not already been provided, ask the customer to provide it so we can retrieve relevant details/
    - Call the 'get_shipment_details_tool' function to fetch the shipment details.
-   - Extract the relevant information required and respond to the user.
+   - Extract ONLY the relevant information required.
+   - Inform the customer.
 3. If the customer has no further questions, end the interaction.
 
 {customer_context}

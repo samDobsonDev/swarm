@@ -50,11 +50,11 @@ class BamlAsyncClient:
 
 
     
-    async def DecideAgentForEvents(
+    async def Evaluate(
         self,
         events: List[types.Event],
         baml_options: BamlCallOptions = {},
-    ) -> types.AgentName:
+    ) -> types.Evaluation:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -63,7 +63,7 @@ class BamlAsyncClient:
       __cr__ = baml_options.get("client_registry", None)
 
       raw = await self.__runtime.call_function(
-        "DecideAgentForEvents",
+        "Evaluate",
         {
           "events": events,
         },
@@ -71,7 +71,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
       )
-      return cast(types.AgentName, raw.cast_to(types, types))
+      return cast(types.Evaluation, raw.cast_to(types, types))
     
 
 
@@ -84,11 +84,11 @@ class BamlStreamClient:
       self.__ctx_manager = ctx_manager
 
     
-    def DecideAgentForEvents(
+    def Evaluate(
         self,
         events: List[types.Event],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Optional[types.AgentName], types.AgentName]:
+    ) -> baml_py.BamlStream[partial_types.Evaluation, types.Evaluation]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -97,7 +97,7 @@ class BamlStreamClient:
       __cr__ = baml_options.get("client_registry", None)
 
       raw = self.__runtime.stream_function(
-        "DecideAgentForEvents",
+        "Evaluate",
         {
           "events": events,
         },
@@ -107,10 +107,10 @@ class BamlStreamClient:
         __cr__,
       )
 
-      return baml_py.BamlStream[Optional[types.AgentName], types.AgentName](
+      return baml_py.BamlStream[partial_types.Evaluation, types.Evaluation](
         raw,
-        lambda x: cast(Optional[types.AgentName], x.cast_to(types, partial_types)),
-        lambda x: cast(types.AgentName, x.cast_to(types, types)),
+        lambda x: cast(partial_types.Evaluation, x.cast_to(types, partial_types)),
+        lambda x: cast(types.Evaluation, x.cast_to(types, types)),
         self.__ctx_manager.get(),
       )
     
