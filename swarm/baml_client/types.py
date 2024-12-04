@@ -45,6 +45,8 @@ class AgentName(str, Enum):
     StockAlertAgent = "StockAlertAgent"
     OrderAndShipmentAgent = "OrderAndShipmentAgent"
     VerificationAgent = "VerificationAgent"
+    InappropriateContentAgent = "InappropriateContentAgent"
+    ReturnsAgent = "ReturnsAgent"
 
 class SecurityMetric(str, Enum):
     

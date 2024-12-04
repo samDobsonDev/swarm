@@ -22,6 +22,9 @@ def order_and_shipment_instructions():
 def verification_instructions():
     return RETAILER_STARTER_PROMPT + VERIFICATION_PROCESS_POLICY
 
+def return_instructions():
+    return RETAILER_STARTER_PROMPT + RETURN_POLICY
+
 general_agent = Agent(
     name="GeneralAgent",
     instructions=general_instructions,
@@ -44,4 +47,20 @@ verification_agent = Agent(
     name="VerificationAgent",
     instructions=verification_instructions,
     functions=[generate_verification_pin_tool, verify_user_tool, check_verification_status_tool],
+)
+
+return_agent = Agent(
+    name="ReturnsAgent",
+    instructions=return_instructions,
+    functions=[
+        get_latest_order_tool,
+        check_return_eligibility_tool,
+        get_return_methods_tool,
+        generate_post_label_tool,
+        locate_parcel_lockers_tool,
+        generate_parcel_locker_code_tool,
+        locate_nearest_stores_tool,
+        process_refund_tool,
+        pick_another_item_tool
+    ],
 )

@@ -15,6 +15,9 @@ pin = "1234"
 user_id = "hbgkuHM7TaciF74+gkTwVSa5hr0="
 channel = "MESSENGER"
 
+# Global variable to store return eligibility
+return_eligibility = None
+
 def get_stock_alerts_tool():
     """
     Retrieves the user's active stock alerts
@@ -124,3 +127,83 @@ def check_verification_status_tool():
         verified_status = "Verified" if user.get('verifiedChannels') else "Not Verified"
         return f"The user is {verified_status}."
     return "User details not found."
+
+def check_return_eligibility_tool(order_number: str):
+    """
+    Checks if an order is eligible for return, exchange, or refund.
+    """
+    global return_eligibility
+    return_eligibility = True
+    return f"Order {order_number} is eligible for exchange or refund."
+
+
+def get_return_methods_tool(order_number: str):
+    """
+    Returns possible return methods for an order.
+    """
+    if not return_eligibility:
+        return f"Order {order_number} is not eligible for return, exchange, or refund."
+
+    return_methods = ["post", "parcel locker", "in-store drop off"]
+    return f"Available return methods for order {order_number}: {', '.join(return_methods)}."
+
+
+def generate_post_label_tool(order_number: str, postage_class: str):
+    """
+    Generates a code for printing a return label for post.
+    """
+    if not return_eligibility:
+        return f"Order {order_number} is not eligible for return, exchange, or refund."
+
+    return f"Use code POST1234 to print your return label for order {order_number} and return it to us via {postage_class}."
+
+
+def locate_parcel_lockers_tool():
+    """
+    Locates nearby parcel lockers.
+    """
+    if not return_eligibility:
+        return "Order is not eligible for return, exchange, or refund."
+
+    lockers = ["Locker A - 123 Main St", "Locker B - 456 Elm St"]
+    return f"Nearby parcel lockers: {', '.join(lockers)}."
+
+
+def generate_parcel_locker_code_tool(locker_choice: str):
+    """
+    Generates a code for a chosen parcel locker.
+    """
+    if not return_eligibility:
+        return "Order is not eligible for return, exchange, or refund."
+
+    return f"Use code LOCKER5678 at {locker_choice} to open the locker."
+
+def locate_nearest_stores_tool():
+    """
+    Locates nearest stores and their opening times.
+    """
+    stores = [
+        "Store A - 123 Main St, Open 9am-9pm",
+        "Store B - 456 Elm St, Open 10am-8pm"
+    ]
+    return f"Nearest stores: {', '.join(stores)}."
+
+def process_refund_tool(order_number: str):
+    """
+    Processes a refund for the given order number.
+    """
+    if not return_eligibility:
+        return f"Order {order_number} is not eligible for a refund."
+
+    # Simulate refund processing
+    return f"Refund for order {order_number} will be processed when we receive the returned item/s. Once we have received said item/s, the refund will take 3-5 working days to appear in your account."
+
+def pick_another_item_tool(order_number: str, item_choice: str):
+    """
+    Allows the customer to pick another item for exchange.
+    """
+    if not return_eligibility:
+        return f"Order {order_number} is not eligible for an exchange."
+
+    # Simulate item exchange process
+    return f"Item {item_choice} has been selected for exchange for order {order_number}. Once we have received the returned item/s, we will send your new item/s out to you."

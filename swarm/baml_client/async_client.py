@@ -54,7 +54,7 @@ class BamlAsyncClient:
         self,
         events: List[types.Event],
         baml_options: BamlCallOptions = {},
-    ) -> types.Evaluation:
+    ) -> types.AgentName:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -71,7 +71,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
       )
-      return cast(types.Evaluation, raw.cast_to(types, types))
+      return cast(types.AgentName, raw.cast_to(types, types))
     
 
 
@@ -88,7 +88,7 @@ class BamlStreamClient:
         self,
         events: List[types.Event],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[partial_types.Evaluation, types.Evaluation]:
+    ) -> baml_py.BamlStream[Optional[types.AgentName], types.AgentName]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -107,10 +107,10 @@ class BamlStreamClient:
         __cr__,
       )
 
-      return baml_py.BamlStream[partial_types.Evaluation, types.Evaluation](
+      return baml_py.BamlStream[Optional[types.AgentName], types.AgentName](
         raw,
-        lambda x: cast(partial_types.Evaluation, x.cast_to(types, partial_types)),
-        lambda x: cast(types.Evaluation, x.cast_to(types, types)),
+        lambda x: cast(Optional[types.AgentName], x.cast_to(types, partial_types)),
+        lambda x: cast(types.AgentName, x.cast_to(types, types)),
         self.__ctx_manager.get(),
       )
     

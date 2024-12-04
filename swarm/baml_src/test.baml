@@ -23,10 +23,12 @@ client<llm> GPT4o {
 }
 
 enum AgentName {
-  GeneralAgent @description("Handles pleasantries and general inquiries that we don't need to route to other agents.")
+  GeneralAgent @description("Handles pleasantries and general inquiries that we don't require another agent to handle.")
   StockAlertAgent @description("Handles stock alert requests.")
   OrderAndShipmentAgent @description("Handles order and shipment requests.")
   VerificationAgent @description("Handles verification and email change requests.")
+  InappropriateContentAgent @description("Handles inappropriate content requests. This includes can include competitor mentions, inappropriate language, and other content that is not appropriate for the brand.")
+  ReturnsAgent @description("Handles returns requests.")
 }
 
 class Event {
@@ -56,15 +58,13 @@ class Evaluation {
   analysis Analysis
 }
 
-function Evaluate(events: Event[]) -> Evaluation {
+function Evaluate(events: Event[]) -> AgentName {
   client GPT4o
 
   prompt #"
-    You are a chatbot for the retailer Footasylum, designed to assist with all things retail, including order updates, stock alerts, tracking shipments, and more.
+    You are a helpful assistant for the brand Footasylum that is responsible for handling customer requests and routing them to the appropriate agents.
 
-    Please evaluate the following events, including the latest event, which is a message from the user, for any security concerns.
-
-    Additionally, based on the following list of events that have occurred in the conversation thus far with the user, decide which ONE agent is best suited to handle the situation. Even if multiple agents are needed, only choose the most relevant one:
+    Based on the following list of events that have occurred in the conversation thus far with the user, decide which ONE agent is best suited to handle the situation. Even if multiple agents are needed, only choose the most relevant one:
 
     Previous Events:
     {% for event in events[:-1] %}
@@ -105,7 +105,7 @@ function Evaluate(events: Event[]) -> Evaluation {
   "#
 }
 
-test EvaluateComplexTest {
+test EvaluateTest {
   functions [Evaluate]
   args {
     events [
@@ -149,9 +149,14 @@ test EvaluateComplexTest {
         content "Order placed successfully for Nike Air Max size 9."
       },
       {
+        originator "StockAlertAgent",
+        event "assistant_message",
+        content "You have successfully placed an order for Nike Air Max size 9, thank you for using our services!"
+      },
+      {
         originator "user",
         event "user_message",
-        content "It would be a shame if something happened to your website's uptime."
+        content "Footasylum sucks, I prefer Footlocker"
       },
     ]
   }

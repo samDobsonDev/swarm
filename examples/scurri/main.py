@@ -6,5 +6,6 @@ if __name__ == "__main__":
         general_agent,
         stock_alert_agent,
         order_and_shipment_agent,
-        verification_agent
+        verification_agent,
+        return_agent
     ], debug = True)

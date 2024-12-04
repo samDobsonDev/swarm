@@ -291,7 +291,7 @@ class Swarm:
     ) -> Response:
         logging.basicConfig(level=logging.ERROR)
         # TODO: Modify this BAML call to return an Evaluation object. This object will contain the AgentName, but also an Analysis object that checks the user's prompt for security
-        agent_name: AgentName = baml.Evaluate(events).agent
+        agent_name: AgentName = baml.Evaluate(events)
         active_agent = next((agent for agent in self.agents if agent.name == agent_name), None)
         if not active_agent:
             raise ValueError(f"No agent found with the name {agent_name}")

@@ -90,3 +90,29 @@ VERIFICATION_PROCESS_POLICY = f"""
 
 {customer_context}
 """
+
+RETURN_POLICY = f"""
+1. If the customer wants to return an item:
+   - If not already provided, we need the order number of the order they want to return. We can call the 'get_latest_order_tool' function to potentially retrieve it, or ask the customer to provide it.
+   - Call the 'check_return_eligibility_tool' function to determine if the order is eligible for return, including the available options (exchange or refund).
+   - Inform the customer of the eligibility status.
+2. If eligible, ask the customer to choose a return method: post, parcel locker, or in-store drop off.
+   - If post is chosen:
+     - Ask the customer to choose the class of post: 1st or 2nd. 1st class will get there within 2 days, and 2nd class will get there within 5 days.
+     - Call the 'generate_post_label_tool' function to provide a code for printing a return label.
+   - If parcel locker is chosen:
+     - Call the 'locate_parcel_lockers_tool' function to find nearby lockers.
+     - Once a locker is chosen, call the 'generate_parcel_locker_code_tool' function to provide a code for the locker.
+   - If in-store drop off is chosen:
+     - Call the 'locate_nearest_stores_tool' function to provide the nearest stores and their opening times.
+3. Next, ask the customer if they want an exchange or a refund.
+   - If the customer chooses an exchange:
+     - Ask the customer to pick another item for exchange.
+     - Call the 'pick_another_item_tool' function to process the exchange.
+   - If the customer chooses a refund:
+     - Call the 'process_refund_tool' function to process the refund.
+4. If the customer has no further questions:
+   - End the interaction.
+
+{customer_context}
+"""
