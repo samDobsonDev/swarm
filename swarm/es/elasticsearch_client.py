@@ -1,7 +1,7 @@
 from elasticsearch import Elasticsearch
 
 class ElasticSearchClient:
-    def __init__(self, elastic_url, username='HDServer', password='d5Dft73gtI8*'):
+    def __init__(self, elastic_url, username='user', password='pass'):
         self.client = Elasticsearch(
             [elastic_url],
             basic_auth=(username, password)
